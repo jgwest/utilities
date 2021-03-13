@@ -12,8 +12,14 @@ public class CompareResticLsListToLocal {
 
 	public static void main(String[] args) throws IOException {
 
+		if (args.length != 1) {
+
+			System.out.println("Parameter required: (path to restic ls list)");
+			return;
+		}
+
 		// restic ls --recursive -l (snapshot id) "/(target dir)" > e:\ls-output.txt
-		Path lsPath = Paths.get("e:\\delme\\all-output.txt");
+		Path lsPath = Paths.get(args[0]);
 
 		long totalLines = Files.lines(lsPath).count();
 

@@ -18,6 +18,11 @@ public class CompareLocalToRestic {
 
 	public static void main(String[] args) throws IOException {
 
+		if (args.length <= 1) {
+			System.out.println("Required parameters: (path to restic ls output file) (src dirs ...)");
+			return;
+		}
+
 		// restic ls --recursive -l (snapshot id) "/(target dir)" > e:\ls-output.txt
 
 		List<String> params = new ArrayList<>(Arrays.asList(args));
