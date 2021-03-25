@@ -1,4 +1,4 @@
-package com.jgw.backuputilities;
+package com.jgw.backuputilities.restic;
 
 import java.io.File;
 import java.io.IOException;
