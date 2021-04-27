@@ -103,3 +103,29 @@ func (cf *ConfigFile) GetConfigType() (ConfigType, error) {
 
 	return "", errors.New("no credentials found")
 }
+
+func (cf *ConfigFile) GetResticCredential() (ResticCredentials, error) {
+
+	// Must have a single restic credential
+	if confType, err := cf.GetConfigType(); confType != Restic || err != nil {
+		if err == nil {
+			err = errors.New("invalid restic credentials")
+		}
+		return ResticCredentials{}, err
+	}
+
+	return *cf.Credentials[0].Restic, nil
+}
+
+func (cf *ConfigFile) GetTarsnapCredential() (TarsnapCredentials, error) {
+
+	// Must have a single tarsnap credential
+	if confType, err := cf.GetConfigType(); confType != Tarsnap || err != nil {
+		if err == nil {
+			err = errors.New("invalid tarsnap credentials")
+		}
+		return TarsnapCredentials{}, err
+	}
+
+	return *cf.Credentials[0].Tarsnap, nil
+}

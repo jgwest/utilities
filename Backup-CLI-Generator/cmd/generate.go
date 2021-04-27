@@ -34,7 +34,7 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// fmt.Println("generate called")
-		err := generate.RunGenerate(args[0])
+		err := generate.RunGenerate(args[0], args[1])
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -46,8 +46,8 @@ func init() {
 
 	generateCmd.Args = func(cmd *cobra.Command, args []string) error {
 
-		if len(args) != 1 {
-			return fmt.Errorf("one argument required: (path to yaml file)")
+		if len(args) != 2 {
+			return fmt.Errorf("one argument required: (path to yaml file) (output path)")
 		}
 
 		return nil

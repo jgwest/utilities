@@ -18,6 +18,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/jgwest/backup-cli/check"
 	"github.com/spf13/cobra"
 )
 
@@ -32,12 +33,21 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("check called")
+		check.RunCheck(args[0], args[1])
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(checkCmd)
+
+	generateCmd.Args = func(cmd *cobra.Command, args []string) error {
+
+		if len(args) != 2 {
+			return fmt.Errorf("two arguments required: (config file path) (shell script path)")
+		}
+
+		return nil
+	}
 
 	// Here you will define your flags and configuration settings.
 
