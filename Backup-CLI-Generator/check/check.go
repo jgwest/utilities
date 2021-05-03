@@ -29,7 +29,7 @@ func RunCheck(configFilePath string, shellScriptPath string) error {
 			return err
 		}
 
-		out, err = generate.ProcessConfig(configFilePath, model)
+		out, err = generate.ProcessConfig(configFilePath, model, false)
 		if err != nil {
 			return err
 		}
