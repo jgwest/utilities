@@ -26,8 +26,7 @@ func RunGenerate(path string, outputPath string) error {
 	}
 
 	model := model.ConfigFile{}
-	err = yaml.Unmarshal(content, &model)
-	if err != nil {
+	if err = yaml.Unmarshal(content, &model); err != nil {
 		return err
 	}
 
@@ -35,10 +34,6 @@ func RunGenerate(path string, outputPath string) error {
 	if err != nil {
 		return err
 	}
-
-	// TODO: Generate then diff
-
-	// TODO: Add robocopy
 
 	// if err := ioutil.WriteFile(outputPath, []byte(result.ToString()), 0600); err != nil {
 	// 	return err
@@ -182,23 +177,20 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 		buffer.out("SCRIPTPATH=\"$( cd -- \"$(dirname \"$0\")\" >/dev/null 2>&1 ; pwd -P )\"")
 	}
 
-	if config.Metadata != nil && config.Metadata.AppendDateTime {
-		if buffer.isWindows {
-			buffer.out("set BACKUP_DATE_TIME=%DATE%-%TIME:~1%")
-		} else {
-			buffer.out("BACKUP_DATE_TIME=`date +%F_%H:%M:%S`")
+	if config.Metadata != nil {
+		if config.Metadata.Name == "" {
+			return nil, fmt.Errorf("if metadata is specified, then name must be specified")
 		}
+
+		if config.Metadata.AppendDateTime {
+			if buffer.isWindows {
+				buffer.out("set BACKUP_DATE_TIME=%DATE%-%TIME:~1%")
+			} else {
+				buffer.out("BACKUP_DATE_TIME=`date +%F_%H:%M:%S`")
+			}
+		}
+
 	}
-
-	buffer.out()
-	buffer.comment("Verify the YAML file still produces this script")
-	buffer.out("backup-cli check \"" + configFilePath + "\" " + buffer.env("SCRIPTPATH"))
-
-	// \/ \/ \/ \/
-
-	// TODO: WARNING - THIS WILL BREAK CRONTAB BACKUPS!!!!!!!!!!!!!!!!!!!!!!
-
-	// /\ /\ /\ /\
 
 	// Process Global Excludes
 	if len(config.GlobalExcludes) > 0 {
@@ -234,9 +226,14 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 		}
 	}
 
+	// robocopyFolders contains a slice of:
+	// - source folder path
+	// - destination folder with basename of source folder appended
 	var robocopyFolders [][]string
 
 	// Process folders
+	// - Populate TODO env var, for everything except robocopy
+	// - For robocopy, populate robocopyFolders
 	{
 		if len(config.Folders) == 0 {
 			return nil, errors.New("at least one folder is required")
@@ -245,49 +242,55 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 		buffer.out("")
 		buffer.header("Folders")
 
+		// slice of [string, model.Folder{}]
 		var processedFolders [][]interface{}
 
-		for _, folder := range config.Folders {
+		// Populate processedFolders with list of folders to backup, and perform sanity tests
+		{
+			checkDupesMap := map[string]string{}
+			for _, folder := range config.Folders {
 
-			if len(folder.Excludes) != 0 &&
-				(configType == model.Restic ||
-					configType == model.Tarsnap ||
-					configType == model.Kopia ||
-					configFilePath == model.Robocopy) {
-				return nil, fmt.Errorf("backup utility '%s' does not support local excludes", configType)
+				if len(folder.Excludes) != 0 &&
+					(configType == model.Restic ||
+						configType == model.Tarsnap ||
+						configType == model.Kopia ||
+						configFilePath == model.Robocopy) {
+					return nil, fmt.Errorf("backup utility '%s' does not support local excludes", configType)
+				}
+
+				if folder.Robocopy != nil && configType != model.Robocopy {
+					return nil, fmt.Errorf("backup utility '%s' does not support robocopy folder entries", configType)
+				}
+
+				srcFolderPath, err := expand(folder.Path, config)
+				if err != nil {
+					return nil, err
+				}
+
+				if _, err := os.Stat(srcFolderPath); os.IsNotExist(err) {
+					return nil, fmt.Errorf("path does not exist: '%s'", srcFolderPath)
+				}
+
+				if _, contains := checkDupesMap[srcFolderPath]; contains {
+					return nil, fmt.Errorf("backup path list contains duplicate path: '%s'", srcFolderPath)
+				}
+
+				processedFolders = append(processedFolders, []interface{}{srcFolderPath, folder})
 			}
-
-			if folder.Robocopy != nil && configType != model.Robocopy {
-				return nil, fmt.Errorf("backup utility '%s' does not support robocopy folder entries", configType)
-			}
-
-			folderPath, err := expand(folder.Path, config)
-			if err != nil {
-				return nil, err
-			}
-
-			if _, err := os.Stat(folderPath); os.IsNotExist(err) {
-				return nil, fmt.Errorf("path does not exist: '%s'", folderPath)
-			}
-
-			processedFolders = append(processedFolders, []interface{}{folderPath, folder})
-
-			// substring := ""
-
-			// if index > 0 {
-			// 	substring = buffer.env("TODO") + " "
-			// }
-
-			// // The unsubstituted path is used here
-			// buffer.setEnv("TODO", fmt.Sprintf("%s'%s'", substring, folderPath))
 		}
 
+		// Everything except robocopy
 		if configType == model.Kopia || configType == model.Restic || configType == model.Tarsnap {
-			for index, folderPath := range processedFolders {
+			for index, processedFolder := range processedFolders {
 				substring := ""
 
 				if index > 0 {
 					substring = buffer.env("TODO") + " "
+				}
+
+				folderPath, ok := (processedFolder[0]).(string)
+				if !ok {
+					return nil, fmt.Errorf("invalid robocopyFolderPath")
 				}
 
 				// The unsubstituted path is used here
@@ -312,16 +315,18 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 						return nil, fmt.Errorf("invalid robocopyFolder")
 					}
 
-					key := filepath.Base(robocopyFolderPath)
+					// Use the name of the src folder as the dest folder name, unless
+					// a replacement is specified in the folder entry.
+					destFolderName := filepath.Base(robocopyFolderPath)
 					if folderEntry.Robocopy != nil && folderEntry.Robocopy.DestFolderName != "" {
-						key = folderEntry.Robocopy.DestFolderName
+						destFolderName = folderEntry.Robocopy.DestFolderName
 					}
 
-					if _, contains := basenameMap[key]; contains {
-						return nil, fmt.Errorf("multiple folders share the same base name: %s", key)
+					if _, contains := basenameMap[destFolderName]; contains {
+						return nil, fmt.Errorf("multiple folders share the same base name: %s", destFolderName)
 					}
 
-					basenameMap[key] = key
+					basenameMap[destFolderName] = destFolderName
 				}
 			}
 
@@ -344,35 +349,26 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 					return nil, fmt.Errorf("invalid robocopyFolder")
 				}
 
-				destDirName := filepath.Base(robocopySrcFolderPath)
+				// Use the name of the src folder as the dest folder name, unless
+				// a replacement is specified in the folder entry.
+				destFolderName := filepath.Base(robocopySrcFolderPath)
 				if folderEntry.Robocopy != nil && folderEntry.Robocopy.DestFolderName != "" {
-					destDirName = folderEntry.Robocopy.DestFolderName
+					destFolderName = folderEntry.Robocopy.DestFolderName
 				}
 
 				// tuple:
 				// - source folder path
 				// - destination folder with basename of source folder appended
-				tuple := []string{robocopySrcFolderPath, filepath.Join(targetFolder, destDirName)}
+				tuple := []string{robocopySrcFolderPath, filepath.Join(targetFolder, destFolderName)}
 				robocopyFolders = append(robocopyFolders, tuple)
 
 			}
 
-			// for _, robocopyFolder := range processedFolders {
-			// 	// tuple:
-			// 	// - source folder path
-			// 	// - destination folder with basename of source folder appended
-			// 	tuple := []string{robocopyFolder, filepath.Join(targetFolder, filepath.Base(robocopyFolder))}
-			// 	robocopyFolders = append(robocopyFolders, tuple)
-
-			// }
-
-		} else {
+		} else { // end robocopy section
 			return nil, errors.New("unrecognized config")
 		}
 
-	}
-
-	// TODO: For all of these, ensure there are no duplicates in the backup paths
+	} // end 'process folders' section
 
 	if configType == model.Restic {
 		resticCredential, err := config.GetResticCredential()
@@ -385,8 +381,6 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 			buffer.header("Credentials ")
 			buffer.setEnv("AWS_ACCESS_KEY_ID", resticCredential.S3.AccessKeyID)
 			buffer.setEnv("AWS_SECRET_ACCESS_KEY", resticCredential.S3.SecretAccessKey)
-			// buffer.out(fmt.Sprintf("AWS_ACCESS_KEY_ID=\"%s\"", resticCredential.S3.AccessKeyID))
-			// buffer.out(fmt.Sprintf("AWS_SECRET_ACCESS_KEY=\"%s\"", resticCredential.S3.SecretAccessKey))
 		}
 
 		if len(resticCredential.Password) > 0 && len(resticCredential.PasswordFile) > 0 {
@@ -395,18 +389,15 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 
 		if len(resticCredential.Password) > 0 {
 			buffer.setEnv("RESTIC_PASSWORD", resticCredential.Password)
-			// buffer.out(fmt.Sprintf("RESTIC_PASSWORD=\"%s\"", resticCredential.Password))
 
 		} else if len(resticCredential.Password) > 0 {
 			buffer.setEnv("RESTIC_PASSWORD_FILE", resticCredential.PasswordFile)
-			// buffer.out(fmt.Sprintf("RESTIC_PASSWORD_FILE=\"%s\"", resticCredential.PasswordFile))
 
 		} else {
 			return nil, errors.New("no restic password found")
 		}
 
 		tagSubstring := ""
-
 		if config.Metadata != nil {
 
 			if len(config.Metadata.Name) == 0 {
@@ -415,13 +406,6 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 
 			tagSubstring = fmt.Sprintf("--tag \"%s", config.Metadata.Name)
 			if config.Metadata.AppendDateTime {
-				// buffer.out()
-				// if buffer.isWindows {
-				// 	buffer.out("set BACKUP_DATE_TIME=%DATE%-%TIME:~1%")
-				// } else {
-				// 	buffer.out("BACKUP_DATE_TIME=`date +%F_%H:%M:%S`")
-				// }
-
 				tagSubstring += buffer.env("BACKUP_DATE_TIME")
 			}
 
@@ -438,7 +422,6 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 		}
 
 		cacertSubstring := ""
-
 		if resticCredential.CACert != "" {
 			expandedPath, err := expand(resticCredential.CACert, config)
 			if err != nil {
@@ -447,11 +430,16 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 			cacertSubstring = "--cacert \"" + expandedPath + "\" "
 		}
 
+		excludesSubstring := ""
+		if len(config.GlobalExcludes) > 0 {
+			excludesSubstring = buffer.env("EXCLUDES") + " "
+		}
+
 		cliInvocation := fmt.Sprintf("restic -r %s --verbose %s%s%s backup %s",
 			url,
 			tagSubstring,
 			cacertSubstring,
-			buffer.env("EXCLUDES"),
+			excludesSubstring,
 			buffer.env("TODO"))
 
 		buffer.out()
@@ -472,18 +460,26 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 		if config.Metadata == nil || len(config.Metadata.Name) == 0 {
 			return nil, fmt.Errorf("tarsnap requires a metadata name")
 		}
-
-		dryRunSubstring := ""
-
-		if dryRun {
-			dryRunSubstring = "--dry-run"
+		backupName := config.Metadata.Name
+		if config.Metadata.AppendDateTime {
+			backupName += buffer.env("BACKUP_DATE_TIME")
 		}
 
-		cliInvocation := fmt.Sprintf("tarsnap --humanize-numbers --configfile \"%s\" -c %s %s -f \"%s\" %s",
+		dryRunSubstring := ""
+		if dryRun {
+			dryRunSubstring = "--dry-run "
+		}
+
+		excludesSubstring := ""
+		if len(config.GlobalExcludes) > 0 {
+			excludesSubstring = buffer.env("EXCLUDES") + " "
+		}
+
+		cliInvocation := fmt.Sprintf("tarsnap --humanize-numbers --configfile \"%s\" -c %s%s -f \"%s\" %s",
 			tarsnapCredentials.ConfigFilePath,
 			dryRunSubstring,
-			buffer.env("EXCLUDES"),
-			buffer.env("BACKUP_DATE_TIME"),
+			excludesSubstring,
+			backupName,
 			buffer.env("TODO"))
 
 		buffer.out()
@@ -496,8 +492,6 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 		if err != nil {
 			return nil, err
 		}
-
-		// TODO: metadata name
 
 		if kopiaCredentials.S3 == nil || kopiaCredentials.KopiaS3 == nil {
 			return nil, fmt.Errorf("missing S3 credentials")
@@ -519,8 +513,6 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 		buffer.header("Credentials ")
 		buffer.setEnv("AWS_ACCESS_KEY_ID", kopiaCredentials.S3.AccessKeyID)
 		buffer.setEnv("AWS_SECRET_ACCESS_KEY", kopiaCredentials.S3.SecretAccessKey)
-		// buffer.out(fmt.Sprintf("AWS_ACCESS_KEY_ID=\"%s\"", resticCredential.S3.AccessKeyID))
-		// buffer.out(fmt.Sprintf("AWS_SECRET_ACCESS_KEY=\"%s\"", resticCredential.S3.SecretAccessKey))
 
 		if len(kopiaCredentials.Password) > 0 {
 			buffer.setEnv("KOPIA_PASSWORD", kopiaCredentials.Password)
@@ -539,16 +531,30 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 
 		buffer.out(cliInvocation)
 
-		cliInvocation = fmt.Sprintf("kopia policy set --global %s", buffer.env("EXCLUDES"))
-		buffer.out(cliInvocation)
+		if len(config.GlobalExcludes) > 0 {
+			cliInvocation = fmt.Sprintf("kopia policy set --global %s", buffer.env("EXCLUDES"))
+			buffer.out(cliInvocation)
+		}
 
 		buffer.out()
 		buffer.header("Create snapshot")
 
-		cliInvocation = fmt.Sprintf("kopia snapshot create %s", buffer.env("TODO"))
-		buffer.out(cliInvocation)
+		descriptionSubstring := ""
+		if config.Metadata != nil && config.Metadata.Name != "" {
+			description := config.Metadata.Name
 
-		// TODO: Add tag to Kopia ?
+			if config.Metadata.AppendDateTime {
+				description += buffer.env("BACKUP_DATE_TIME")
+			}
+
+			descriptionSubstring = fmt.Sprintf("--description=\"%s\" ", description)
+		}
+
+		cliInvocation = fmt.Sprintf("kopia snapshot create %s%s",
+			descriptionSubstring,
+			buffer.env("TODO"))
+
+		buffer.out(cliInvocation)
 
 	} else if configType == model.Robocopy {
 
@@ -561,8 +567,12 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 			return nil, errors.New("missing destination folder")
 		}
 
-		if robocopyCredentials.Switches == " " {
+		if robocopyCredentials.Switches == "" {
 			return nil, errors.New("missing switches")
+		}
+
+		if config.Metadata != nil && (config.Metadata.Name != "" || config.Metadata.AppendDateTime) {
+			return nil, fmt.Errorf("metadata features are not supported with robocopy")
 		}
 
 		if _, err := os.Stat(robocopyCredentials.DestinationFolder); os.IsNotExist(err) {
@@ -578,6 +588,10 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 	} else {
 		return nil, errors.New("unsupported config")
 	}
+
+	buffer.out()
+	buffer.header("Verify the YAML file still produces this script")
+	buffer.out("backup-cli check \"" + configFilePath + "\" " + buffer.env("SCRIPTPATH"))
 
 	return &buffer, nil
 }
@@ -628,11 +642,9 @@ func (buffer *OutputBuffer) ToString() string {
 		} else {
 			output += "\n"
 		}
-
 	}
 
 	return output
-
 }
 
 func (buffer *OutputBuffer) setEnv(envName string, value string) {
@@ -669,14 +681,14 @@ func (buffer *OutputBuffer) header(str string) {
 
 }
 
-func (buffer *OutputBuffer) comment(str string) {
-	if buffer.isWindows {
-		buffer.out("REM " + str)
-	} else {
-		buffer.out("# " + str)
-	}
+// func (buffer *OutputBuffer) comment(str string) {
+// 	if buffer.isWindows {
+// 		buffer.out("REM " + str)
+// 	} else {
+// 		buffer.out("# " + str)
+// 	}
 
-}
+// }
 
 func (buffer *OutputBuffer) out(str ...string) {
 	if len(str) == 0 {

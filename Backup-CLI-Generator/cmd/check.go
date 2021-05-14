@@ -40,7 +40,7 @@ to quickly create a Cobra application.`,
 func init() {
 	rootCmd.AddCommand(checkCmd)
 
-	generateCmd.Args = func(cmd *cobra.Command, args []string) error {
+	checkCmd.Args = func(cmd *cobra.Command, args []string) error {
 
 		if len(args) != 2 {
 			return fmt.Errorf("two arguments required: (config file path) (shell script path)")

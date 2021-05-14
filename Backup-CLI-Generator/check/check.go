@@ -14,8 +14,8 @@ import (
 
 func RunCheck(configFilePath string, shellScriptPath string) error {
 
+	// Process the configurate file
 	var out *generate.OutputBuffer
-
 	{
 		content, err := ioutil.ReadFile(configFilePath)
 		if err != nil {
@@ -35,18 +35,17 @@ func RunCheck(configFilePath string, shellScriptPath string) error {
 		}
 	}
 
+	// Read the existing shell script
 	content, err := ioutil.ReadFile(shellScriptPath)
 	if err != nil {
 		return err
 	}
 
+	// Diff the desired output with the existing shell script and report differences
 	dmp := diffmatchpatch.New()
-
 	diffs := dmp.DiffMain(string(content), out.ToString(), false)
-
 	if len(diffs) > 0 {
 		fmt.Println(dmp.DiffPrettyText(diffs))
-
 		os.Exit(1)
 	}
 
