@@ -35,9 +35,14 @@ func RunGenerate(path string, outputPath string) error {
 		return err
 	}
 
-	// if err := ioutil.WriteFile(outputPath, []byte(result.ToString()), 0600); err != nil {
-	// 	return err
-	// }
+	// If the output path already exists, don't overwrite it
+	if _, err := os.Stat(outputPath); err == nil {
+		return fmt.Errorf("output path already exists: %s", outputPath)
+	}
+
+	if err := ioutil.WriteFile(outputPath, []byte(result.ToString()), 0700); err != nil {
+		return err
+	}
 
 	fmt.Println(result.ToString())
 
@@ -174,7 +179,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 	} else {
 		buffer.lines = []string{"#!/bin/bash", "", "set -eu"}
 		// https://stackoverflow.com/questions/4774054/reliable-way-for-a-bash-script-to-get-the-full-path-to-itself
-		buffer.out("SCRIPTPATH=\"$( cd -- \"$(dirname \"$0\")\" >/dev/null 2>&1 ; pwd -P )\"")
+		buffer.out("SCRIPTPATH=`realpath -s $0`")
 	}
 
 	if config.Metadata != nil {
@@ -216,10 +221,12 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 			}
 
 			if configType == model.Kopia {
-				buffer.setEnv("EXCLUDES", substring+"--add-ignore '"+expandedValue+"'")
+				// TODO: This needs to be something different on Windows, probably without the slash
+				buffer.setEnv("EXCLUDES", substring+"--add-ignore \\\""+expandedValue+"\\\"")
 
 			} else if configType == model.Restic || configType == model.Tarsnap {
-				buffer.setEnv("EXCLUDES", substring+"--exclude '"+expandedValue+"'")
+				// TODO: This needs to be something different on Windows, probably without the slash
+				buffer.setEnv("EXCLUDES", substring+"--exclude \\\""+expandedValue+"\\\"")
 				// buffer.out("EXCLUDES=\"" + substring + "--exclude '" + exclude + "'\"")
 			}
 
@@ -293,8 +300,10 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 					return nil, fmt.Errorf("invalid robocopyFolderPath")
 				}
 
+				// TODO: This needs to be something different on Windows, probably without the slash
+
 				// The unsubstituted path is used here
-				buffer.setEnv("TODO", fmt.Sprintf("%s'%s'", substring, folderPath))
+				buffer.setEnv("TODO", fmt.Sprintf("%s\\\"%s\\\"", substring, folderPath))
 			}
 		} else if configType == model.Robocopy {
 
@@ -404,12 +413,12 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 				return nil, errors.New("metadata exists, but name is nil")
 			}
 
-			tagSubstring = fmt.Sprintf("--tag \"%s", config.Metadata.Name)
+			tagSubstring = fmt.Sprintf("--tag '%s", config.Metadata.Name)
 			if config.Metadata.AppendDateTime {
 				tagSubstring += buffer.env("BACKUP_DATE_TIME")
 			}
 
-			tagSubstring += "\" "
+			tagSubstring += "' "
 		}
 
 		url := ""
@@ -444,7 +453,11 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 
 		buffer.out()
 
-		buffer.out(cliInvocation)
+		if buffer.isWindows {
+			buffer.out(cliInvocation)
+		} else {
+			buffer.out("bash -c \"" + cliInvocation + "\"")
+		}
 
 	} else if configType == model.Tarsnap {
 
@@ -484,7 +497,13 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 
 		buffer.out()
 
-		buffer.out(cliInvocation)
+		if buffer.isWindows {
+			buffer.out(cliInvocation)
+		} else {
+			buffer.out("bash -c \"" + cliInvocation + "\"")
+		}
+
+		// buffer.out(cliInvocation)
 
 	} else if configType == model.Kopia {
 
@@ -554,7 +573,13 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 			descriptionSubstring,
 			buffer.env("TODO"))
 
-		buffer.out(cliInvocation)
+		if buffer.isWindows {
+			buffer.out(cliInvocation)
+		} else {
+			buffer.out("bash -c \"" + cliInvocation + "\"")
+		}
+
+		// buffer.out(cliInvocation)
 
 	} else if configType == model.Robocopy {
 
@@ -649,9 +674,10 @@ func (buffer *OutputBuffer) ToString() string {
 
 func (buffer *OutputBuffer) setEnv(envName string, value string) {
 	if buffer.isWindows {
-		buffer.out(fmt.Sprintf("set "+envName+"=\"%s\"", value))
+		buffer.out(fmt.Sprintf("set %s=\"%s\"", envName, value))
 	} else {
-		buffer.out(fmt.Sprintf(envName+"=\"%s\"", value))
+		// Export is used due to need to use 'bash -c (...)' at end of script
+		buffer.out(fmt.Sprintf("export %s=\"%s\"", envName, value))
 	}
 }
 
