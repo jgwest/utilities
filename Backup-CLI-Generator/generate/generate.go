@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/jgwest/backup-cli/model"
@@ -140,7 +141,7 @@ func checkMonitorFolders(configFilePath string, config model.ConfigFile) error {
 				if err != nil {
 					return err
 				}
-				fmt.Println("      - " + rel)
+				fmt.Println("      - " + rel + "  # " + ubPath)
 			}
 
 			fmt.Println()
@@ -169,7 +170,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 	}
 
 	buffer := OutputBuffer{
-		isWindows: false,
+		isWindows: runtime.GOOS == "windows",
 	}
 
 	if buffer.isWindows {
@@ -211,7 +212,6 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 			substring := ""
 
 			if index > 0 {
-				// substring = "$EXCLUDES "
 				substring = buffer.env("EXCLUDES") + " "
 			}
 
@@ -225,9 +225,11 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 				buffer.setEnv("EXCLUDES", substring+"--add-ignore \\\""+expandedValue+"\\\"")
 
 			} else if configType == model.Restic || configType == model.Tarsnap {
-				// TODO: This needs to be something different on Windows, probably without the slash
-				buffer.setEnv("EXCLUDES", substring+"--exclude \\\""+expandedValue+"\\\"")
-				// buffer.out("EXCLUDES=\"" + substring + "--exclude '" + exclude + "'\"")
+				if buffer.isWindows {
+					buffer.setEnv("EXCLUDES", substring+"--exclude \""+expandedValue+"\"")
+				} else {
+					buffer.setEnv("EXCLUDES", substring+"--exclude \\\""+expandedValue+"\\\"")
+				}
 			}
 
 		}
@@ -303,7 +305,13 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 				// TODO: This needs to be something different on Windows, probably without the slash
 
 				// The unsubstituted path is used here
-				buffer.setEnv("TODO", fmt.Sprintf("%s\\\"%s\\\"", substring, folderPath))
+
+				if buffer.isWindows {
+					buffer.setEnv("TODO", fmt.Sprintf("%s\"%s\"", substring, folderPath))
+				} else {
+					buffer.setEnv("TODO", fmt.Sprintf("%s\\\"%s\\\"", substring, folderPath))
+				}
+
 			}
 		} else if configType == model.Robocopy {
 
@@ -413,12 +421,17 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 				return nil, errors.New("metadata exists, but name is nil")
 			}
 
-			tagSubstring = fmt.Sprintf("--tag '%s", config.Metadata.Name)
+			quote := "'"
+			if buffer.isWindows {
+				quote = "\""
+			}
+
+			tagSubstring = fmt.Sprintf("--tag %s%s", quote, config.Metadata.Name)
 			if config.Metadata.AppendDateTime {
 				tagSubstring += buffer.env("BACKUP_DATE_TIME")
 			}
 
-			tagSubstring += "' "
+			tagSubstring += quote + " "
 		}
 
 		url := ""
@@ -674,7 +687,14 @@ func (buffer *OutputBuffer) ToString() string {
 
 func (buffer *OutputBuffer) setEnv(envName string, value string) {
 	if buffer.isWindows {
-		buffer.out(fmt.Sprintf("set %s=\"%s\"", envName, value))
+
+		// convert "Z:\" to "Z:\\"
+		if strings.HasSuffix(value, "\\\"") {
+			value = value[0 : len(value)-2]
+			value += "\\\\\""
+		}
+
+		buffer.out(fmt.Sprintf("set %s=%s", envName, value))
 	} else {
 		// Export is used due to need to use 'bash -c (...)' at end of script
 		buffer.out(fmt.Sprintf("export %s=\"%s\"", envName, value))
@@ -683,7 +703,7 @@ func (buffer *OutputBuffer) setEnv(envName string, value string) {
 
 func (buffer *OutputBuffer) env(envName string) string {
 	if buffer.isWindows {
-		return "%" + envName
+		return "%" + envName + "%"
 	} else {
 		return "${" + envName + "}"
 	}

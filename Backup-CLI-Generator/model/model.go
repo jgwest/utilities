@@ -21,7 +21,7 @@ type Metadata struct {
 
 type MonitorFolder struct {
 	Path     string   `yaml:"path"`
-	Excludes []string `yaml:"excludes"`
+	Excludes []string `yaml:"excludes,omitempty"`
 }
 
 type Folder struct {
