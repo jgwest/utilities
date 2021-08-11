@@ -65,7 +65,6 @@ func checkMonitorFolders(configFilePath string, config model.ConfigFile) error {
 		if err != nil {
 			return err
 		}
-
 		if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
 			return fmt.Errorf("'folders' path does not exist: '%s'", folder.Path)
 		}
@@ -85,7 +84,10 @@ func checkMonitorFolders(configFilePath string, config model.ConfigFile) error {
 
 	for _, monitorFolder := range config.MonitorFolders {
 
-		monitorPath := os.ExpandEnv(monitorFolder.Path)
+		monitorPath, err := expand(monitorFolder.Path, config)
+		if err != nil {
+			return err
+		}
 
 		// If the paths to backup contain the monitor path itself, then we are good, so continue to the next item
 		if contains(expandedBackupPaths, monitorPath) {
