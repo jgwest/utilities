@@ -65,6 +65,7 @@ func checkMonitorFolders(configFilePath string, config model.ConfigFile) error {
 		if err != nil {
 			return err
 		}
+
 		if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
 			return fmt.Errorf("'folders' path does not exist: '%s'", folder.Path)
 		}
@@ -95,7 +96,7 @@ func checkMonitorFolders(configFilePath string, config model.ConfigFile) error {
 		}
 
 		if _, err := os.Stat(monitorPath); os.IsNotExist(err) {
-			return fmt.Errorf("'monitor path' does not exist: '%s'", monitorPath)
+			return fmt.Errorf("'monitor path' does not exist: '%s' (%s)", monitorPath, monitorFolder.Path)
 		}
 
 		pathInfo, err := ioutil.ReadDir(monitorPath)
@@ -233,8 +234,60 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 					buffer.setEnv("EXCLUDES", substring+"--exclude \\\""+expandedValue+"\\\"")
 				}
 			}
-
 		}
+	}
+
+	if config.RobocopySettings != nil {
+
+		if configType != model.Robocopy || !buffer.isWindows {
+			return nil, errors.New("robocopy settings not supported for non-robocopy")
+		}
+
+		buffer.out()
+		buffer.header("Excludes")
+
+		excludesCount := 0
+
+		for _, excludeFile := range config.RobocopySettings.ExcludeFiles {
+
+			substring := ""
+
+			if excludesCount > 0 {
+				substring = buffer.env("EXCLUDES") + " "
+			}
+
+			expandedValue, err := expand(excludeFile, config)
+			if err != nil {
+				return nil, err
+			}
+
+			buffer.setEnv("EXCLUDES", substring+"/XF \""+expandedValue+"\"")
+
+			excludesCount++
+		}
+
+		for _, excludeDir := range config.RobocopySettings.ExcludeFolders {
+
+			substring := ""
+
+			if excludesCount > 0 {
+				substring = buffer.env("EXCLUDES") + " "
+			}
+
+			expandedValue, err := expand(excludeDir, config)
+			if err != nil {
+				return nil, err
+			}
+
+			if strings.Contains(expandedValue, "*") {
+				return nil, fmt.Errorf("wildcards may not be supported in directories with robocopy: %s", expandedValue)
+			}
+
+			buffer.setEnv("EXCLUDES", substring+"/XD \""+expandedValue+"\"")
+
+			excludesCount++
+		}
+
 	}
 
 	// robocopyFolders contains a slice of:
@@ -409,7 +462,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 		if len(resticCredential.Password) > 0 {
 			buffer.setEnv("RESTIC_PASSWORD", resticCredential.Password)
 
-		} else if len(resticCredential.Password) > 0 {
+		} else if len(resticCredential.PasswordFile) > 0 {
 			buffer.setEnv("RESTIC_PASSWORD_FILE", resticCredential.PasswordFile)
 
 		} else {

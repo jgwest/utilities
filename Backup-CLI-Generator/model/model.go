@@ -6,12 +6,13 @@ import (
 )
 
 type ConfigFile struct {
-	Metadata       *Metadata       `yaml:"metadata,omitempty"`
-	Substitutions  []Substitution  `yaml:"substitutions,omitempty"`
-	Credentials    []Credentials   `yaml:"credentials,omitempty"`
-	GlobalExcludes []string        `yaml:"globalExcludes,omitempty"`
-	Folders        []Folder        `yaml:"folders,omitempty"`
-	MonitorFolders []MonitorFolder `yaml:"monitorFolders,omitempty"`
+	Metadata         *Metadata         `yaml:"metadata,omitempty"`
+	Substitutions    []Substitution    `yaml:"substitutions,omitempty"`
+	Credentials      []Credentials     `yaml:"credentials,omitempty"`
+	GlobalExcludes   []string          `yaml:"globalExcludes,omitempty"`
+	Folders          []Folder          `yaml:"folders,omitempty"`
+	MonitorFolders   []MonitorFolder   `yaml:"monitorFolders,omitempty"`
+	RobocopySettings *RobocopySettings `yaml:"robocopySettings,omitempty"`
 }
 
 type Metadata struct {
@@ -79,6 +80,11 @@ type KopiaS3Credentials struct {
 	Region   string `yaml:"region"`
 	Bucket   string `yaml:"bucket"`
 	Endpoint string `yaml:"endpoint"`
+}
+
+type RobocopySettings struct {
+	ExcludeFiles   []string `yaml:"excludeFiles,omitempty"`
+	ExcludeFolders []string `yaml:"excludeFolders,omitempty"`
 }
 
 type ConfigType string
