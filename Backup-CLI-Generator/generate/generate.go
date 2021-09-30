@@ -295,6 +295,10 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 	// - destination folder with basename of source folder appended
 	var robocopyFolders [][]string
 
+	// key: path to be backed up
+	// value: list of excludes for that path
+	kopiaPolicyExcludes := map[string][]string{}
+
 	// Process folders
 	// - Populate TODO env var, for everything except robocopy
 	// - For robocopy, populate robocopyFolders
@@ -337,6 +341,16 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 
 				if _, contains := checkDupesMap[srcFolderPath]; contains {
 					return nil, fmt.Errorf("backup path list contains duplicate path: '%s'", srcFolderPath)
+				}
+
+				if len(folder.Excludes) != 0 &&
+					(configType == model.Restic ||
+						configType == model.Tarsnap ||
+						configType == model.Robocopy) {
+					return nil, fmt.Errorf("backup utility '%s' does not support local excludes", configType)
+
+				} else if configType == model.Kopia {
+					kopiaPolicyExcludes[srcFolderPath] = append(kopiaPolicyExcludes[srcFolderPath], folder.Excludes...)
 				}
 
 				processedFolders = append(processedFolders, []interface{}{srcFolderPath, folder})
@@ -621,6 +635,28 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 		if len(config.GlobalExcludes) > 0 {
 			cliInvocation = fmt.Sprintf("kopia policy set --global %s", buffer.env("EXCLUDES"))
 			buffer.out(cliInvocation)
+		}
+
+		// Build
+		if len(kopiaPolicyExcludes) > 0 {
+			buffer.out()
+			buffer.header("Add policy excludes")
+
+			for backupPath, excludes := range kopiaPolicyExcludes {
+
+				if len(excludes) == 0 {
+					continue
+				}
+
+				excludesStr := ""
+				for _, exclude := range excludes {
+					excludesStr += "--add-ignore \"" + exclude + "\" "
+				}
+				excludesStr = strings.TrimSpace(excludesStr)
+
+				cliInvocation = fmt.Sprintf("kopia policy set %s \"%s\"", excludesStr, backupPath)
+				buffer.out(cliInvocation)
+			}
 		}
 
 		buffer.out()
