@@ -368,7 +368,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 
 				folderPath, ok := (processedFolder[0]).(string)
 				if !ok {
-					return nil, fmt.Errorf("invalid robocopyFolderPath")
+					return nil, fmt.Errorf("invalid non-robocopyFolderPath")
 				}
 
 				// TODO: This needs to be something different on Windows, probably without the slash
@@ -711,7 +711,9 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 		buffer.setEnv("SWITCHES", robocopyCredentials.Switches)
 
 		for _, folderTuple := range robocopyFolders {
-			buffer.out(fmt.Sprintf("robocopy \"%s\" \"%s\" %s", folderTuple[0], folderTuple[1], buffer.env("SWITCHES")))
+			srcFolder := fixWindowsPathSuffix("\"" + folderTuple[0] + "\"")
+			destFolder := fixWindowsPathSuffix("\"" + folderTuple[1] + "\"")
+			buffer.out(fmt.Sprintf("robocopy %s %s %s", srcFolder, destFolder, buffer.env("SWITCHES")))
 		}
 
 	} else {
@@ -776,14 +778,25 @@ func (buffer *OutputBuffer) ToString() string {
 	return output
 }
 
+func fixWindowsPathSuffix(input string) string {
+
+	if strings.HasSuffix(input, "\\\"") {
+		input = input[0 : len(input)-2]
+		input += "\\\\\""
+	}
+	return input
+}
+
 func (buffer *OutputBuffer) setEnv(envName string, value string) {
 	if buffer.isWindows {
 
+		value = fixWindowsPathSuffix(value)
+
 		// convert "Z:\" to "Z:\\"
-		if strings.HasSuffix(value, "\\\"") {
-			value = value[0 : len(value)-2]
-			value += "\\\\\""
-		}
+		// if strings.HasSuffix(value, "\\\"") {
+		// 	value = value[0 : len(value)-2]
+		// 	value += "\\\\\""
+		// }
 
 		buffer.out(fmt.Sprintf("set %s=%s", envName, value))
 	} else {
