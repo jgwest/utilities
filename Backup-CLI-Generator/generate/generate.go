@@ -51,17 +51,27 @@ func RunGenerate(path string, outputPath string) error {
 
 }
 
+func backupPathContains(backupPaths []string, testStr string) bool {
+	for _, backupPath := range backupPaths {
+		if testStr == backupPath {
+			return true
+		}
+	}
+	return false
+}
+
+// checkMonitorFolders verifies that there are no unignored child folders of monitor folders.
 func checkMonitorFolders(configFilePath string, config model.ConfigFile) error {
 
 	if len(config.MonitorFolders) == 0 {
 		return nil
 	}
 
+	// Expand the folders to backup (ensuring they exist)
 	expandedBackupPaths := []string{}
-
 	for _, folder := range config.Folders {
 
-		expandedPath, err := expand(folder.Path, config)
+		expandedPath, err := expand(folder.Path, config.Substitutions)
 		if err != nil {
 			return err
 		}
@@ -73,68 +83,63 @@ func checkMonitorFolders(configFilePath string, config model.ConfigFile) error {
 		expandedBackupPaths = append(expandedBackupPaths, expandedPath)
 	}
 
-	// return true if array contains string, false otherwise
-	contains := func(backupPaths []string, testStr string) bool {
-		for _, backupPath := range backupPaths {
-			if testStr == backupPath {
-				return true
-			}
-		}
-		return false
-	}
+	// // return true if array contains exact string, false otherwise
+	// contains := func(backupPaths []string, testStr string) bool {
+	// 	for _, backupPath := range backupPaths {
+	// 		if testStr == backupPath {
+	// 			return true
+	// 		}
+	// 	}
+	// 	return false
+	// }
 
 	for _, monitorFolder := range config.MonitorFolders {
 
-		monitorPath, err := expand(monitorFolder.Path, config)
+		monitorPath, err := expand(monitorFolder.Path, config.Substitutions)
 		if err != nil {
 			return err
 		}
 
 		// If the paths to backup contain the monitor path itself, then we are good, so continue to the next item
-		if contains(expandedBackupPaths, monitorPath) {
+		if backupPathContains(expandedBackupPaths, monitorPath) {
 			continue
 		}
 
-		if _, err := os.Stat(monitorPath); os.IsNotExist(err) {
-			return fmt.Errorf("'monitor path' does not exist: '%s' (%s)", monitorPath, monitorFolder.Path)
-		}
-
-		pathInfo, err := ioutil.ReadDir(monitorPath)
+		unbackedupPaths, err := findUnbackedUpPaths(monitorPath, monitorFolder, expandedBackupPaths)
 		if err != nil {
 			return err
 		}
 
-		unbackedupPaths := []string{}
+		// outer:
+		// 	// For each child folder under the monitor folder...
+		// 	for _, monPathInfo := range pathInfo {
+		// 		if !monPathInfo.IsDir() {
+		// 			continue
+		// 		}
 
-	outer:
-		for _, monPathInfo := range pathInfo {
-			if !monPathInfo.IsDir() {
-				continue
-			}
+		// 		fullPathName := filepath.Join(monitorPath, monPathInfo.Name())
 
-			fullPathName := filepath.Join(monitorPath, monPathInfo.Name())
+		// 		// For each of the excluded directories in the monitor folder, expand the glob if needed,
+		// 		// then see if the fullPathName is one of the glob matches; if so, skip it.
+		// 		for _, exclude := range monitorFolder.Excludes {
 
-			// For each of the excluded directories in the monitor folder, expand the glob if needed,
-			// then see if the fullPathName is one of the glob matches; if so, skip it.
-			for _, exclude := range monitorFolder.Excludes {
+		// 			globMatches, err := filepath.Glob(filepath.Join(monitorPath, exclude))
+		// 			if err != nil {
+		// 				return err
+		// 			}
 
-				globMatches, err := filepath.Glob(filepath.Join(monitorPath, exclude))
-				if err != nil {
-					return err
-				}
+		// 			// The folder from the folder list matched an exclude, so skip it
+		// 			if backupPathContains(globMatches, fullPathName) {
+		// 				continue outer
+		// 			}
+		// 		}
 
-				// The folder from the folder list matched an exclude, so skip it
-				if contains(globMatches, fullPathName) {
-					continue outer
-				}
-			}
+		// 		// For each of the folders under monitorPath, ensure they are backed up
+		// 		if !backupPathContains(expandedBackupPaths, fullPathName) {
+		// 			unbackedupPaths = append(unbackedupPaths, fullPathName)
+		// 		}
 
-			// For each of the folders under monitorPath, ensure they are backed up
-			if !contains(expandedBackupPaths, fullPathName) {
-				unbackedupPaths = append(unbackedupPaths, fullPathName)
-			}
-
-		}
+		// 	}
 
 		if len(unbackedupPaths) != 0 {
 			fmt.Println()
@@ -155,6 +160,53 @@ func checkMonitorFolders(configFilePath string, config model.ConfigFile) error {
 	}
 
 	return nil
+}
+
+func findUnbackedUpPaths(monitorPath string, monitorFolder model.MonitorFolder, expandedBackupPaths []string) ([]string, error) {
+
+	if _, err := os.Stat(monitorPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("'monitor path' does not exist: '%s' (%s)", monitorPath, monitorFolder.Path)
+	}
+
+	pathInfo, err := ioutil.ReadDir(monitorPath)
+	if err != nil {
+		return nil, err
+	}
+
+	unbackedupPaths := []string{}
+
+	// For each child folder under the monitor folder...
+outer:
+	for _, monPathInfo := range pathInfo {
+		if !monPathInfo.IsDir() {
+			continue
+		}
+
+		fullPathName := filepath.Join(monitorPath, monPathInfo.Name())
+
+		// For each of the excluded directories in the monitor folder, expand the glob if needed,
+		// then see if the fullPathName is one of the glob matches; if so, skip it.
+		for _, exclude := range monitorFolder.Excludes {
+
+			globMatches, err := filepath.Glob(filepath.Join(monitorPath, exclude))
+			if err != nil {
+				return nil, err
+			}
+
+			// The folder from the folder list matched an exclude, so skip it
+			if backupPathContains(globMatches, fullPathName) {
+				continue outer
+			}
+		}
+
+		// For each of the folders under monitorPath, ensure they are backed up
+		if !backupPathContains(expandedBackupPaths, fullPathName) {
+			unbackedupPaths = append(unbackedupPaths, fullPathName)
+		}
+	}
+
+	return unbackedupPaths, nil
+
 }
 
 func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) (*OutputBuffer, error) {
@@ -201,11 +253,11 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 
 	}
 
-	// Process Global Excludes
+	// Populate EXCLUDES var, by processing Global Excludes
 	if len(config.GlobalExcludes) > 0 {
 
 		if configType == model.Robocopy {
-			return nil, errors.New("robocopy does not support excludes")
+			return nil, errors.New("robocopy does not support global excludes")
 		}
 
 		buffer.out()
@@ -218,7 +270,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 				substring = buffer.env("EXCLUDES") + " "
 			}
 
-			expandedValue, err := expand(exclude, config)
+			expandedValue, err := expand(exclude, config.Substitutions)
 			if err != nil {
 				return nil, err
 			}
@@ -226,6 +278,8 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 			if configType == model.Kopia {
 				// TODO: This needs to be something different on Windows, probably without the slash
 				buffer.setEnv("EXCLUDES", substring+"--add-ignore \\\""+expandedValue+"\\\"")
+
+				return nil, fmt.Errorf("this needs to be something different on Windows, probably without the slash")
 
 			} else if configType == model.Restic || configType == model.Tarsnap {
 				if buffer.isWindows {
@@ -237,6 +291,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 		}
 	}
 
+	// Robocopy only: Populate EXCLUDES
 	if config.RobocopySettings != nil {
 
 		if configType != model.Robocopy || !buffer.isWindows {
@@ -256,7 +311,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 				substring = buffer.env("EXCLUDES") + " "
 			}
 
-			expandedValue, err := expand(excludeFile, config)
+			expandedValue, err := expand(excludeFile, config.Substitutions)
 			if err != nil {
 				return nil, err
 			}
@@ -274,7 +329,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 				substring = buffer.env("EXCLUDES") + " "
 			}
 
-			expandedValue, err := expand(excludeDir, config)
+			expandedValue, err := expand(excludeDir, config.Substitutions)
 			if err != nil {
 				return nil, err
 			}
@@ -292,7 +347,11 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 
 	// robocopyFolders contains a slice of:
 	// - source folder path
-	// - destination folder with basename of source folder appended
+	// - destination folder (with basename of source folder appended)
+	// Example:
+	// - [C:\Users] -> [B:\backup\C-Users]
+	// - [D:\Users] -> [B:\backup\D-Users]
+	// - [C:\To-Backup] -> [B:\backup\To-Backup]
 	var robocopyFolders [][]string
 
 	// key: path to be backed up
@@ -330,7 +389,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 					return nil, fmt.Errorf("backup utility '%s' does not support robocopy folder entries", configType)
 				}
 
-				srcFolderPath, err := expand(folder.Path, config)
+				srcFolderPath, err := expand(folder.Path, config.Substitutions)
 				if err != nil {
 					return nil, err
 				}
@@ -446,6 +505,9 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 				// - source folder path
 				// - destination folder with basename of source folder appended
 				tuple := []string{robocopySrcFolderPath, filepath.Join(targetFolder, destFolderName)}
+
+				// fmt.Println("- ["+robocopySrcFolderPath+"]", "["+filepath.Join(targetFolder, destFolderName)+"]")
+
 				robocopyFolders = append(robocopyFolders, tuple)
 
 			}
@@ -514,7 +576,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 
 		cacertSubstring := ""
 		if resticCredential.CACert != "" {
-			expandedPath, err := expand(resticCredential.CACert, config)
+			expandedPath, err := expand(resticCredential.CACert, config.Substitutions)
 			if err != nil {
 				return nil, err
 			}
@@ -732,11 +794,12 @@ type OutputBuffer struct {
 	lines     []string
 }
 
-func expand(input string, configFile model.ConfigFile) (output string, err error) {
+// expand returns the input string, replacing $var with config file substitutions, or env vars, in that order.
+func expand(input string, configFileSubstitutions []model.Substitution) (output string, err error) {
 
 	substitutions := map[string]string{}
 
-	for _, substitution := range configFile.Substitutions {
+	for _, substitution := range configFileSubstitutions {
 		substitutions[substitution.Name] = substitution.Value
 	}
 
