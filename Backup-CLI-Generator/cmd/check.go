@@ -13,7 +13,10 @@ var checkCmd = &cobra.Command{
 	Short: "Output a diff between the expected script, and the actual script.",
 	Long:  "Output a diff between the expected script, and the actual script.",
 	Run: func(cmd *cobra.Command, args []string) {
-		check.RunCheck(args[0], args[1])
+		err := check.RunCheck(args[0], args[1])
+		if err != nil {
+			fmt.Println(err)
+		}
 	},
 }
 

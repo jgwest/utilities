@@ -374,7 +374,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 
 		// Populate processedFolders with list of folders to backup, and perform sanity tests
 		{
-			checkDupesMap := map[string]string{}
+			checkDupesMap := map[string] /* source folder path -> not used */ interface{}{}
 			for _, folder := range config.Folders {
 
 				if len(folder.Excludes) != 0 &&
@@ -793,6 +793,56 @@ type OutputBuffer struct {
 	isWindows bool
 	lines     []string
 }
+
+// func meow( /*kopiaPolicyExcludes map[string][]string,*/ configType model.ConfigType, configFolders []model.Folder, configFileSubstitutions []model.Substitution) ([][]interface{}, error) {
+
+// 	var processedFolders [][]interface{}
+
+// 	// Populate processedFolders with list of folders to backup, and perform sanity tests
+// 	checkDupesMap := map[string] /* source folder path -> not used */ interface{}{}
+// 	for _, folder := range configFolders {
+
+// 		if len(folder.Excludes) != 0 &&
+// 			(configType == model.Restic ||
+// 				configType == model.Tarsnap ||
+// 				configType == model.Kopia ||
+// 				configType == model.Robocopy) {
+// 			return nil, fmt.Errorf("backup utility '%s' does not support local excludes", configType)
+// 		}
+
+// 		if folder.Robocopy != nil && configType != model.Robocopy {
+// 			return nil, fmt.Errorf("backup utility '%s' does not support robocopy folder entries", configType)
+// 		}
+
+// 		srcFolderPath, err := expand(folder.Path, configFileSubstitutions)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+
+// 		if _, err := os.Stat(srcFolderPath); os.IsNotExist(err) {
+// 			return nil, fmt.Errorf("path does not exist: '%s'", srcFolderPath)
+// 		}
+
+// 		if _, contains := checkDupesMap[srcFolderPath]; contains {
+// 			return nil, fmt.Errorf("backup path list contains duplicate path: '%s'", srcFolderPath)
+// 		}
+
+// 		if len(folder.Excludes) != 0 &&
+// 			(configType == model.Restic ||
+// 				configType == model.Tarsnap ||
+// 				configType == model.Robocopy) {
+// 			return nil, fmt.Errorf("backup utility '%s' does not support local excludes", configType)
+
+// 		} else if configType == model.Kopia {
+// 			kopiaPolicyExcludes[srcFolderPath] = append(kopiaPolicyExcludes[srcFolderPath], folder.Excludes...)
+// 		}
+
+// 		processedFolders = append(processedFolders, []interface{}{srcFolderPath, folder})
+// 	}
+
+// 	return processedFolders, nil
+
+// }
 
 // expand returns the input string, replacing $var with config file substitutions, or env vars, in that order.
 func expand(input string, configFileSubstitutions []model.Substitution) (output string, err error) {
