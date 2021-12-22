@@ -369,52 +369,56 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 		buffer.out("")
 		buffer.header("Folders")
 
-		// slice of [string, model.Folder{}]
-		var processedFolders [][]interface{}
-
-		// Populate processedFolders with list of folders to backup, and perform sanity tests
-		{
-			checkDupesMap := map[string] /* source folder path -> not used */ interface{}{}
-			for _, folder := range config.Folders {
-
-				if len(folder.Excludes) != 0 &&
-					(configType == model.Restic ||
-						configType == model.Tarsnap ||
-						configType == model.Kopia ||
-						configFilePath == model.Robocopy) {
-					return nil, fmt.Errorf("backup utility '%s' does not support local excludes", configType)
-				}
-
-				if folder.Robocopy != nil && configType != model.Robocopy {
-					return nil, fmt.Errorf("backup utility '%s' does not support robocopy folder entries", configType)
-				}
-
-				srcFolderPath, err := expand(folder.Path, config.Substitutions)
-				if err != nil {
-					return nil, err
-				}
-
-				if _, err := os.Stat(srcFolderPath); os.IsNotExist(err) {
-					return nil, fmt.Errorf("path does not exist: '%s'", srcFolderPath)
-				}
-
-				if _, contains := checkDupesMap[srcFolderPath]; contains {
-					return nil, fmt.Errorf("backup path list contains duplicate path: '%s'", srcFolderPath)
-				}
-
-				if len(folder.Excludes) != 0 &&
-					(configType == model.Restic ||
-						configType == model.Tarsnap ||
-						configType == model.Robocopy) {
-					return nil, fmt.Errorf("backup utility '%s' does not support local excludes", configType)
-
-				} else if configType == model.Kopia {
-					kopiaPolicyExcludes[srcFolderPath] = append(kopiaPolicyExcludes[srcFolderPath], folder.Excludes...)
-				}
-
-				processedFolders = append(processedFolders, []interface{}{srcFolderPath, folder})
-			}
+		// processFolder is a slice of: [string (path to backup), model.Folder (folder object)]
+		// - This function also updates kopiaPolicyExcludes, if applicable.
+		processedFolders, err := populateProcessedFolders(configType, config.Folders, config.Substitutions, kopiaPolicyExcludes)
+		if err != nil {
+			return nil, fmt.Errorf("unable to populateProcessedFolder: %v", err)
 		}
+
+		// // Populate processedFolders with list of folders to backup, and perform sanity tests
+		// {
+		// 	checkDupesMap := map[string] /* source folder path -> not used */ interface{}{}
+		// 	for _, folder := range config.Folders {
+
+		// 		if len(folder.Excludes) != 0 &&
+		// 			(configType == model.Restic ||
+		// 				configType == model.Tarsnap ||
+		// 				configType == model.Kopia ||
+		// 				configFilePath == model.Robocopy) {
+		// 			return nil, fmt.Errorf("backup utility '%s' does not support local excludes", configType)
+		// 		}
+
+		// 		if folder.Robocopy != nil && configType != model.Robocopy {
+		// 			return nil, fmt.Errorf("backup utility '%s' does not support robocopy folder entries", configType)
+		// 		}
+
+		// 		srcFolderPath, err := expand(folder.Path, config.Substitutions)
+		// 		if err != nil {
+		// 			return nil, err
+		// 		}
+
+		// 		if _, err := os.Stat(srcFolderPath); os.IsNotExist(err) {
+		// 			return nil, fmt.Errorf("path does not exist: '%s'", srcFolderPath)
+		// 		}
+
+		// 		if _, contains := checkDupesMap[srcFolderPath]; contains {
+		// 			return nil, fmt.Errorf("backup path list contains duplicate path: '%s'", srcFolderPath)
+		// 		}
+
+		// 		if len(folder.Excludes) != 0 &&
+		// 			(configType == model.Restic ||
+		// 				configType == model.Tarsnap ||
+		// 				configType == model.Robocopy) {
+		// 			return nil, fmt.Errorf("backup utility '%s' does not support local excludes", configType)
+
+		// 		} else if configType == model.Kopia {
+		// 			kopiaPolicyExcludes[srcFolderPath] = append(kopiaPolicyExcludes[srcFolderPath], folder.Excludes...)
+		// 		}
+
+		// 		processedFolders = append(processedFolders, []interface{}{srcFolderPath, folder})
+		// 	}
+		// }
 
 		// Everything except robocopy
 		if configType == model.Kopia || configType == model.Restic || configType == model.Tarsnap {
@@ -446,34 +450,39 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 			// TODO: Write a test for this:
 
 			// Ensure that none of the folders share a basename
-			{
-				basenameMap := map[string]string{}
-				for _, robocopyFolder := range processedFolders {
-
-					robocopyFolderPath, ok := (robocopyFolder[0]).(string)
-					if !ok {
-						return nil, fmt.Errorf("invalid robocopyFolderPath")
-					}
-
-					folderEntry, ok := (robocopyFolder[1]).(model.Folder)
-					if !ok {
-						return nil, fmt.Errorf("invalid robocopyFolder")
-					}
-
-					// Use the name of the src folder as the dest folder name, unless
-					// a replacement is specified in the folder entry.
-					destFolderName := filepath.Base(robocopyFolderPath)
-					if folderEntry.Robocopy != nil && folderEntry.Robocopy.DestFolderName != "" {
-						destFolderName = folderEntry.Robocopy.DestFolderName
-					}
-
-					if _, contains := basenameMap[destFolderName]; contains {
-						return nil, fmt.Errorf("multiple folders share the same base name: %s", destFolderName)
-					}
-
-					basenameMap[destFolderName] = destFolderName
-				}
+			err := validateRobocopyBasenames(processedFolders)
+			if err != nil {
+				return nil, err
 			}
+			//
+			// {
+			// 	basenameMap := map[string]string{}
+			// 	for _, robocopyFolder := range processedFolders {
+
+			// 		robocopyFolderPath, ok := (robocopyFolder[0]).(string)
+			// 		if !ok {
+			// 			return nil, fmt.Errorf("invalid robocopyFolderPath")
+			// 		}
+
+			// 		folderEntry, ok := (robocopyFolder[1]).(model.Folder)
+			// 		if !ok {
+			// 			return nil, fmt.Errorf("invalid robocopyFolder")
+			// 		}
+
+			// 		// Use the name of the src folder as the dest folder name, unless
+			// 		// a replacement is specified in the folder entry.
+			// 		destFolderName := filepath.Base(robocopyFolderPath)
+			// 		if folderEntry.Robocopy != nil && folderEntry.Robocopy.DestFolderName != "" {
+			// 			destFolderName = folderEntry.Robocopy.DestFolderName
+			// 		}
+
+			// 		if _, contains := basenameMap[destFolderName]; contains {
+			// 			return nil, fmt.Errorf("multiple folders share the same base name: %s", destFolderName)
+			// 		}
+
+			// 		basenameMap[destFolderName] = destFolderName
+			// 	}
+			// }
 
 			robocopyCredentials, err := config.GetRobocopyCredential()
 			if err != nil {
@@ -789,60 +798,97 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 	return &buffer, nil
 }
 
+// validateRobocopyBasenames ensures that none of the folders share a basename
+func validateRobocopyBasenames(processedFolders [][]interface{}) error {
+
+	basenameMap := map[string]interface{}{}
+	for _, robocopyFolder := range processedFolders {
+
+		robocopyFolderPath, ok := (robocopyFolder[0]).(string)
+		if !ok {
+			return fmt.Errorf("invalid robocopyFolderPath")
+		}
+
+		folderEntry, ok := (robocopyFolder[1]).(model.Folder)
+		if !ok {
+			return fmt.Errorf("invalid robocopyFolder")
+		}
+
+		// Use the name of the src folder as the dest folder name, unless
+		// a replacement is specified in the folder entry.
+		destFolderName := filepath.Base(robocopyFolderPath)
+		if folderEntry.Robocopy != nil && folderEntry.Robocopy.DestFolderName != "" {
+			destFolderName = folderEntry.Robocopy.DestFolderName
+		}
+
+		if _, contains := basenameMap[destFolderName]; contains {
+			return fmt.Errorf("multiple folders share the same base name: %s", destFolderName)
+		}
+
+		basenameMap[destFolderName] = destFolderName
+	}
+	return nil
+}
+
 type OutputBuffer struct {
 	isWindows bool
 	lines     []string
 }
 
-// func meow( /*kopiaPolicyExcludes map[string][]string,*/ configType model.ConfigType, configFolders []model.Folder, configFileSubstitutions []model.Substitution) ([][]interface{}, error) {
+// populateProcessedFolders performs error checking on config file folders, then returns
+// the a tuple containing (folder path to backup, folder object)
+func populateProcessedFolders(configType model.ConfigType, configFolders []model.Folder, configFileSubstitutions []model.Substitution, kopiaPolicyExcludes map[string][]string) ([][]interface{}, error) {
 
-// 	var processedFolders [][]interface{}
+	var processedFolders [][]interface{}
+	// Array of interfaces, containing:
+	// - path of folder to backup
+	// - the corresponding 'Folder' object
 
-// 	// Populate processedFolders with list of folders to backup, and perform sanity tests
-// 	checkDupesMap := map[string] /* source folder path -> not used */ interface{}{}
-// 	for _, folder := range configFolders {
+	// Populate processedFolders with list of folders to backup, and perform sanity tests
+	checkDupesMap := map[string] /* source folder path -> not used */ interface{}{}
+	for _, folder := range configFolders {
 
-// 		if len(folder.Excludes) != 0 &&
-// 			(configType == model.Restic ||
-// 				configType == model.Tarsnap ||
-// 				configType == model.Kopia ||
-// 				configType == model.Robocopy) {
-// 			return nil, fmt.Errorf("backup utility '%s' does not support local excludes", configType)
-// 		}
+		// if len(folder.Excludes) != 0 &&
+		// 	(configType == model.Restic ||
+		// 		configType == model.Tarsnap ||
+		// 		configType == model.Kopia ||
+		// 		configType == model.Robocopy) {
+		// 	return nil, fmt.Errorf("backup utility '%s' does not support local excludes", configType)
+		// }
 
-// 		if folder.Robocopy != nil && configType != model.Robocopy {
-// 			return nil, fmt.Errorf("backup utility '%s' does not support robocopy folder entries", configType)
-// 		}
+		if folder.Robocopy != nil && configType != model.Robocopy {
+			return nil, fmt.Errorf("backup utility '%s' does not support robocopy folder entries", configType)
+		}
 
-// 		srcFolderPath, err := expand(folder.Path, configFileSubstitutions)
-// 		if err != nil {
-// 			return nil, err
-// 		}
+		srcFolderPath, err := expand(folder.Path, configFileSubstitutions)
+		if err != nil {
+			return nil, err
+		}
 
-// 		if _, err := os.Stat(srcFolderPath); os.IsNotExist(err) {
-// 			return nil, fmt.Errorf("path does not exist: '%s'", srcFolderPath)
-// 		}
+		if _, err := os.Stat(srcFolderPath); os.IsNotExist(err) {
+			return nil, fmt.Errorf("path does not exist: '%s'", srcFolderPath)
+		}
 
-// 		if _, contains := checkDupesMap[srcFolderPath]; contains {
-// 			return nil, fmt.Errorf("backup path list contains duplicate path: '%s'", srcFolderPath)
-// 		}
+		if _, contains := checkDupesMap[srcFolderPath]; contains {
+			return nil, fmt.Errorf("backup path list contains duplicate path: '%s'", srcFolderPath)
+		}
 
-// 		if len(folder.Excludes) != 0 &&
-// 			(configType == model.Restic ||
-// 				configType == model.Tarsnap ||
-// 				configType == model.Robocopy) {
-// 			return nil, fmt.Errorf("backup utility '%s' does not support local excludes", configType)
+		if len(folder.Excludes) != 0 &&
+			(configType == model.Restic ||
+				configType == model.Tarsnap ||
+				configType == model.Robocopy) {
+			return nil, fmt.Errorf("backup utility '%s' does not support local excludes", configType)
 
-// 		} else if configType == model.Kopia {
-// 			kopiaPolicyExcludes[srcFolderPath] = append(kopiaPolicyExcludes[srcFolderPath], folder.Excludes...)
-// 		}
+		} else if configType == model.Kopia {
+			kopiaPolicyExcludes[srcFolderPath] = append(kopiaPolicyExcludes[srcFolderPath], folder.Excludes...)
+		}
 
-// 		processedFolders = append(processedFolders, []interface{}{srcFolderPath, folder})
-// 	}
+		processedFolders = append(processedFolders, []interface{}{srcFolderPath, folder})
+	}
 
-// 	return processedFolders, nil
+	return processedFolders, nil
 
-// }
+}
 
 // expand returns the input string, replacing $var with config file substitutions, or env vars, in that order.
 func expand(input string, configFileSubstitutions []model.Substitution) (output string, err error) {
