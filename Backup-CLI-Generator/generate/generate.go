@@ -431,7 +431,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 
 				folderPath, ok := (processedFolder[0]).(string)
 				if !ok {
-					return nil, fmt.Errorf("invalid non-robocopyFolderPath")
+					return nil, fmt.Errorf("invalid non-robocopy folderPath")
 				}
 
 				// TODO: This needs to be something different on Windows, probably without the slash
@@ -447,11 +447,8 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 			}
 		} else if configType == model.Robocopy {
 
-			// TODO: Write a test for this:
-
 			// Ensure that none of the folders share a basename
-			err := validateRobocopyBasenames(processedFolders)
-			if err != nil {
+			if err := robocopyValidateBasenames(processedFolders); err != nil {
 				return nil, err
 			}
 			//
@@ -484,179 +481,70 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 			// 	}
 			// }
 
-			robocopyCredentials, err := config.GetRobocopyCredential()
-			if err != nil {
+			if robocopyCredentials, err := config.GetRobocopyCredential(); err == nil {
+
+				robocopyFolders, err = robocopyGenerateTargetPaths(processedFolders, robocopyCredentials)
+				if err != nil {
+					return nil, err
+				}
+
+			} else {
 				return nil, err
 			}
 
-			targetFolder := robocopyCredentials.DestinationFolder
+			// targetFolder := robocopyCredentials.DestinationFolder
 
-			for _, robocopyFolder := range processedFolders {
+			// for _, robocopyFolder := range processedFolders {
 
-				robocopySrcFolderPath, ok := (robocopyFolder[0]).(string)
-				if !ok {
-					return nil, fmt.Errorf("invalid robocopyFolderPath")
-				}
+			// 	robocopySrcFolderPath, ok := (robocopyFolder[0]).(string)
+			// 	if !ok {
+			// 		return nil, fmt.Errorf("invalid robocopyFolderPath")
+			// 	}
 
-				folderEntry, ok := (robocopyFolder[1]).(model.Folder)
-				if !ok {
-					return nil, fmt.Errorf("invalid robocopyFolder")
-				}
+			// 	folderEntry, ok := (robocopyFolder[1]).(model.Folder)
+			// 	if !ok {
+			// 		return nil, fmt.Errorf("invalid robocopyFolder")
+			// 	}
 
-				// Use the name of the src folder as the dest folder name, unless
-				// a replacement is specified in the folder entry.
-				destFolderName := filepath.Base(robocopySrcFolderPath)
-				if folderEntry.Robocopy != nil && folderEntry.Robocopy.DestFolderName != "" {
-					destFolderName = folderEntry.Robocopy.DestFolderName
-				}
+			// 	// Use the name of the src folder as the dest folder name, unless
+			// 	// a replacement is specified in the folder entry.
+			// 	destFolderName := filepath.Base(robocopySrcFolderPath)
+			// 	if folderEntry.Robocopy != nil && folderEntry.Robocopy.DestFolderName != "" {
+			// 		destFolderName = folderEntry.Robocopy.DestFolderName
+			// 	}
 
-				// tuple:
-				// - source folder path
-				// - destination folder with basename of source folder appended
-				tuple := []string{robocopySrcFolderPath, filepath.Join(targetFolder, destFolderName)}
+			// 	// tuple:
+			// 	// - source folder path
+			// 	// - destination folder with basename of source folder appended
+			// 	tuple := []string{robocopySrcFolderPath, filepath.Join(targetFolder, destFolderName)}
 
-				// fmt.Println("- ["+robocopySrcFolderPath+"]", "["+filepath.Join(targetFolder, destFolderName)+"]")
+			// 	// fmt.Println("- ["+robocopySrcFolderPath+"]", "["+filepath.Join(targetFolder, destFolderName)+"]")
 
-				robocopyFolders = append(robocopyFolders, tuple)
+			// 	robocopyFolders = append(robocopyFolders, tuple)
 
-			}
+			// }
 
 		} else { // end robocopy section
-			return nil, errors.New("unrecognized config")
+			return nil, errors.New("unrecognized config type")
 		}
 
 	} // end 'process folders' section
 
 	if configType == model.Restic {
-		resticCredential, err := config.GetResticCredential()
+
+		// Uses the 'TODO' env var, generated above, to know what to backup.
+		err = resticGenerateInvocation(config, &buffer)
 		if err != nil {
 			return nil, err
-		}
-
-		if resticCredential.S3 != nil {
-			buffer.out()
-			buffer.header("Credentials ")
-			buffer.setEnv("AWS_ACCESS_KEY_ID", resticCredential.S3.AccessKeyID)
-			buffer.setEnv("AWS_SECRET_ACCESS_KEY", resticCredential.S3.SecretAccessKey)
-		}
-
-		if len(resticCredential.Password) > 0 && len(resticCredential.PasswordFile) > 0 {
-			return nil, errors.New("both password and password file are specified")
-		}
-
-		if len(resticCredential.Password) > 0 {
-			buffer.setEnv("RESTIC_PASSWORD", resticCredential.Password)
-
-		} else if len(resticCredential.PasswordFile) > 0 {
-			buffer.setEnv("RESTIC_PASSWORD_FILE", resticCredential.PasswordFile)
-
-		} else {
-			return nil, errors.New("no restic password found")
-		}
-
-		tagSubstring := ""
-		if config.Metadata != nil {
-
-			if len(config.Metadata.Name) == 0 {
-				return nil, errors.New("metadata exists, but name is nil")
-			}
-
-			quote := "'"
-			if buffer.isWindows {
-				quote = "\""
-			}
-
-			tagSubstring = fmt.Sprintf("--tag %s%s", quote, config.Metadata.Name)
-			if config.Metadata.AppendDateTime {
-				tagSubstring += buffer.env("BACKUP_DATE_TIME")
-			}
-
-			tagSubstring += quote + " "
-		}
-
-		url := ""
-		if resticCredential.S3 != nil {
-			url = "s3:" + resticCredential.S3.URL
-		} else if resticCredential.RESTEndpoint != "" {
-			url = "rest:" + resticCredential.RESTEndpoint
-		} else {
-			return nil, errors.New("unable to locate connection credentials")
-		}
-
-		cacertSubstring := ""
-		if resticCredential.CACert != "" {
-			expandedPath, err := expand(resticCredential.CACert, config.Substitutions)
-			if err != nil {
-				return nil, err
-			}
-			cacertSubstring = "--cacert \"" + expandedPath + "\" "
-		}
-
-		excludesSubstring := ""
-		if len(config.GlobalExcludes) > 0 {
-			excludesSubstring = buffer.env("EXCLUDES") + " "
-		}
-
-		cliInvocation := fmt.Sprintf("restic -r %s --verbose %s%s%s backup %s",
-			url,
-			tagSubstring,
-			cacertSubstring,
-			excludesSubstring,
-			buffer.env("TODO"))
-
-		buffer.out()
-
-		if buffer.isWindows {
-			buffer.out(cliInvocation)
-		} else {
-			buffer.out("bash -c \"" + cliInvocation + "\"")
 		}
 
 	} else if configType == model.Tarsnap {
 
-		tarsnapCredentials, err := config.GetTarsnapCredential()
+		// Uses TODO, EXCLUDES, BACKUP_DATE_TIME, from above
+		err := tarsnapGenerateInvocation(config, dryRun, &buffer)
 		if err != nil {
 			return nil, err
 		}
-
-		if _, err := os.Stat(tarsnapCredentials.ConfigFilePath); os.IsNotExist(err) {
-			return nil, fmt.Errorf("tarsnap config path does not exist: '%s'", tarsnapCredentials.ConfigFilePath)
-		}
-
-		if config.Metadata == nil || len(config.Metadata.Name) == 0 {
-			return nil, fmt.Errorf("tarsnap requires a metadata name")
-		}
-		backupName := config.Metadata.Name
-		if config.Metadata.AppendDateTime {
-			backupName += buffer.env("BACKUP_DATE_TIME")
-		}
-
-		dryRunSubstring := ""
-		if dryRun {
-			dryRunSubstring = "--dry-run "
-		}
-
-		excludesSubstring := ""
-		if len(config.GlobalExcludes) > 0 {
-			excludesSubstring = buffer.env("EXCLUDES") + " "
-		}
-
-		cliInvocation := fmt.Sprintf("tarsnap --humanize-numbers --configfile \"%s\" -c %s%s -f \"%s\" %s",
-			tarsnapCredentials.ConfigFilePath,
-			dryRunSubstring,
-			excludesSubstring,
-			backupName,
-			buffer.env("TODO"))
-
-		buffer.out()
-
-		if buffer.isWindows {
-			buffer.out(cliInvocation)
-		} else {
-			buffer.out("bash -c \"" + cliInvocation + "\"")
-		}
-
-		// buffer.out(cliInvocation)
 
 	} else if configType == model.Kopia {
 
@@ -798,8 +686,189 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 	return &buffer, nil
 }
 
-// validateRobocopyBasenames ensures that none of the folders share a basename
-func validateRobocopyBasenames(processedFolders [][]interface{}) error {
+func tarsnapGenerateInvocation(config model.ConfigFile, dryRun bool, buffer *OutputBuffer) error {
+
+	tarsnapCredentials, err := config.GetTarsnapCredential()
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(tarsnapCredentials.ConfigFilePath); os.IsNotExist(err) {
+		return fmt.Errorf("tarsnap config path does not exist: '%s'", tarsnapCredentials.ConfigFilePath)
+	}
+
+	if config.Metadata == nil || len(config.Metadata.Name) == 0 {
+		return fmt.Errorf("tarsnap requires a metadata name")
+	}
+
+	backupName := config.Metadata.Name
+	if config.Metadata.AppendDateTime {
+		backupName += buffer.env("BACKUP_DATE_TIME")
+	}
+
+	dryRunSubstring := ""
+	if dryRun {
+		dryRunSubstring = "--dry-run "
+	}
+
+	excludesSubstring := ""
+	if len(config.GlobalExcludes) > 0 {
+		excludesSubstring = buffer.env("EXCLUDES") + " "
+	}
+
+	cliInvocation := fmt.Sprintf(
+		"tarsnap --humanize-numbers --configfile \"%s\" -c %s%s -f \"%s\" %s",
+		tarsnapCredentials.ConfigFilePath,
+		dryRunSubstring,
+		excludesSubstring,
+		backupName,
+		buffer.env("TODO"))
+
+	buffer.out()
+
+	if buffer.isWindows {
+		buffer.out(cliInvocation)
+	} else {
+		buffer.out("bash -c \"" + cliInvocation + "\"")
+	}
+
+	return nil
+}
+
+func resticGenerateInvocation(config model.ConfigFile, buffer *OutputBuffer) error {
+
+	resticCredential, err := config.GetResticCredential()
+	if err != nil {
+		return err
+	}
+
+	if resticCredential.S3 != nil {
+		buffer.out()
+		buffer.header("Credentials ")
+		buffer.setEnv("AWS_ACCESS_KEY_ID", resticCredential.S3.AccessKeyID)
+		buffer.setEnv("AWS_SECRET_ACCESS_KEY", resticCredential.S3.SecretAccessKey)
+	}
+
+	if len(resticCredential.Password) > 0 && len(resticCredential.PasswordFile) > 0 {
+		return errors.New("both password and password file are specified")
+	}
+
+	if len(resticCredential.Password) > 0 {
+		buffer.setEnv("RESTIC_PASSWORD", resticCredential.Password)
+
+	} else if len(resticCredential.PasswordFile) > 0 {
+		buffer.setEnv("RESTIC_PASSWORD_FILE", resticCredential.PasswordFile)
+
+	} else {
+		return errors.New("no restic password found")
+	}
+
+	tagSubstring := ""
+	if config.Metadata != nil {
+		if len(config.Metadata.Name) == 0 {
+			return errors.New("metadata exists, but name is nil")
+		}
+
+		quote := "'"
+		if buffer.isWindows {
+			quote = "\""
+		}
+
+		tagSubstring = fmt.Sprintf("--tag %s%s", quote, config.Metadata.Name)
+		if config.Metadata.AppendDateTime {
+			tagSubstring += buffer.env("BACKUP_DATE_TIME")
+		}
+
+		tagSubstring += quote + " "
+	}
+
+	url := ""
+	if resticCredential.S3 != nil {
+		url = "s3:" + resticCredential.S3.URL
+	} else if resticCredential.RESTEndpoint != "" {
+		url = "rest:" + resticCredential.RESTEndpoint
+	} else {
+		return errors.New("unable to locate connection credentials")
+	}
+
+	cacertSubstring := ""
+	if resticCredential.CACert != "" {
+		expandedPath, err := expand(resticCredential.CACert, config.Substitutions)
+		if err != nil {
+			return err
+		}
+		cacertSubstring = "--cacert \"" + expandedPath + "\" "
+	}
+
+	excludesSubstring := ""
+	if len(config.GlobalExcludes) > 0 {
+		excludesSubstring = buffer.env("EXCLUDES") + " "
+	}
+
+	cliInvocation := fmt.Sprintf("restic -r %s --verbose %s%s%s backup %s",
+		url,
+		tagSubstring,
+		cacertSubstring,
+		excludesSubstring,
+		buffer.env("TODO"))
+
+	buffer.out()
+
+	if buffer.isWindows {
+		buffer.out(cliInvocation)
+	} else {
+		buffer.out("bash -c \"" + cliInvocation + "\"")
+	}
+
+	return nil
+}
+
+// robocopyGenerateTargetPaths returns a slice of:
+// - source folder path
+// - destination folder (with basename of source folder appended)
+// Example:
+// - [C:\Users] -> [B:\backup\C-Users]
+// - [D:\Users] -> [B:\backup\D-Users]
+// - [C:\To-Backup] -> [B:\backup\To-Backup]
+func robocopyGenerateTargetPaths(processedFolders [][]interface{}, robocopyCredentials model.RobocopyCredentials) ([][]string, error) {
+	res := [][]string{}
+
+	targetFolder := robocopyCredentials.DestinationFolder
+
+	for _, robocopyFolder := range processedFolders {
+
+		robocopySrcFolderPath, ok := (robocopyFolder[0]).(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid robocopyFolderPath")
+		}
+
+		folderEntry, ok := (robocopyFolder[1]).(model.Folder)
+		if !ok {
+			return nil, fmt.Errorf("invalid robocopyFolder")
+		}
+
+		// Use the name of the src folder as the dest folder name, unless
+		// a replacement is specified in the folder entry.
+		destFolderName := filepath.Base(robocopySrcFolderPath)
+		if folderEntry.Robocopy != nil && folderEntry.Robocopy.DestFolderName != "" {
+			destFolderName = folderEntry.Robocopy.DestFolderName
+		}
+
+		// tuple:
+		// - source folder path
+		// - destination folder with basename of source folder appended
+		tuple := []string{robocopySrcFolderPath, filepath.Join(targetFolder, destFolderName)}
+
+		res = append(res, tuple)
+
+	}
+
+	return res, nil
+
+}
+
+// robocopyValidateBasenames ensures that none of the folders share a basename
+func robocopyValidateBasenames(processedFolders [][]interface{}) error {
 
 	basenameMap := map[string]interface{}{}
 	for _, robocopyFolder := range processedFolders {
