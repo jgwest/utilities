@@ -548,101 +548,11 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 
 	} else if configType == model.Kopia {
 
-		kopiaCredentials, err := config.GetKopiaCredential()
+		// USes TODO, BACKUP_DATE_TIME, EXCLUDES, from above
+		err = kopiaGenerateInvocation(kopiaPolicyExcludes, config, &buffer)
 		if err != nil {
 			return nil, err
 		}
-
-		if kopiaCredentials.S3 == nil || kopiaCredentials.KopiaS3 == nil {
-			return nil, fmt.Errorf("missing S3 credentials")
-		}
-
-		if kopiaCredentials.S3.AccessKeyID == "" || kopiaCredentials.S3.SecretAccessKey == "" {
-			return nil, fmt.Errorf("missing S3 credential values")
-		}
-
-		if kopiaCredentials.KopiaS3.Bucket == "" || kopiaCredentials.KopiaS3.Region == "" || kopiaCredentials.KopiaS3.Endpoint == "" {
-			return nil, fmt.Errorf("missing S3 credential values")
-		}
-
-		if kopiaCredentials.Password == "" {
-			return nil, fmt.Errorf("missing kopia password")
-		}
-
-		buffer.out()
-		buffer.header("Credentials ")
-		buffer.setEnv("AWS_ACCESS_KEY_ID", kopiaCredentials.S3.AccessKeyID)
-		buffer.setEnv("AWS_SECRET_ACCESS_KEY", kopiaCredentials.S3.SecretAccessKey)
-
-		if len(kopiaCredentials.Password) > 0 {
-			buffer.setEnv("KOPIA_PASSWORD", kopiaCredentials.Password)
-		}
-
-		buffer.out()
-		buffer.header("Connect repository")
-
-		cliInvocation := fmt.Sprintf("kopia repository connect s3 --bucket=\"%s\" --access-key=\"%s\" --secret-access-key=\"%s\" --password=\"%s\" --endpoint=\"%s\" --region=\"%s\"",
-			kopiaCredentials.KopiaS3.Bucket,
-			buffer.env("AWS_ACCESS_KEY_ID"),
-			buffer.env("AWS_SECRET_ACCESS_KEY"),
-			buffer.env("KOPIA_PASSWORD"),
-			kopiaCredentials.KopiaS3.Endpoint,
-			kopiaCredentials.KopiaS3.Region)
-
-		buffer.out(cliInvocation)
-
-		if len(config.GlobalExcludes) > 0 {
-			cliInvocation = fmt.Sprintf("kopia policy set --global %s", buffer.env("EXCLUDES"))
-			buffer.out(cliInvocation)
-		}
-
-		// Build
-		if len(kopiaPolicyExcludes) > 0 {
-			buffer.out()
-			buffer.header("Add policy excludes")
-
-			for backupPath, excludes := range kopiaPolicyExcludes {
-
-				if len(excludes) == 0 {
-					continue
-				}
-
-				excludesStr := ""
-				for _, exclude := range excludes {
-					excludesStr += "--add-ignore \"" + exclude + "\" "
-				}
-				excludesStr = strings.TrimSpace(excludesStr)
-
-				cliInvocation = fmt.Sprintf("kopia policy set %s \"%s\"", excludesStr, backupPath)
-				buffer.out(cliInvocation)
-			}
-		}
-
-		buffer.out()
-		buffer.header("Create snapshot")
-
-		descriptionSubstring := ""
-		if config.Metadata != nil && config.Metadata.Name != "" {
-			description := config.Metadata.Name
-
-			if config.Metadata.AppendDateTime {
-				description += buffer.env("BACKUP_DATE_TIME")
-			}
-
-			descriptionSubstring = fmt.Sprintf("--description=\"%s\" ", description)
-		}
-
-		cliInvocation = fmt.Sprintf("kopia snapshot create %s%s",
-			descriptionSubstring,
-			buffer.env("TODO"))
-
-		if buffer.isWindows {
-			buffer.out(cliInvocation)
-		} else {
-			buffer.out("bash -c \"" + cliInvocation + "\"")
-		}
-
-		// buffer.out(cliInvocation)
 
 	} else if configType == model.Robocopy {
 
@@ -684,6 +594,105 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 	buffer.out("backup-cli check \"" + configFilePath + "\" " + buffer.env("SCRIPTPATH"))
 
 	return &buffer, nil
+}
+
+func kopiaGenerateInvocation(kopiaPolicyExcludes map[string][]string, config model.ConfigFile, buffer *OutputBuffer) error {
+
+	kopiaCredentials, err := config.GetKopiaCredential()
+	if err != nil {
+		return err
+	}
+
+	if kopiaCredentials.S3 == nil || kopiaCredentials.KopiaS3 == nil {
+		return fmt.Errorf("missing S3 credentials")
+	}
+
+	if kopiaCredentials.S3.AccessKeyID == "" || kopiaCredentials.S3.SecretAccessKey == "" {
+		return fmt.Errorf("missing S3 credential values")
+	}
+
+	if kopiaCredentials.KopiaS3.Bucket == "" || kopiaCredentials.KopiaS3.Region == "" || kopiaCredentials.KopiaS3.Endpoint == "" {
+		return fmt.Errorf("missing S3 credential values")
+	}
+
+	if kopiaCredentials.Password == "" {
+		return fmt.Errorf("missing kopia password")
+	}
+
+	buffer.out()
+	buffer.header("Credentials ")
+	buffer.setEnv("AWS_ACCESS_KEY_ID", kopiaCredentials.S3.AccessKeyID)
+	buffer.setEnv("AWS_SECRET_ACCESS_KEY", kopiaCredentials.S3.SecretAccessKey)
+
+	if len(kopiaCredentials.Password) > 0 {
+		buffer.setEnv("KOPIA_PASSWORD", kopiaCredentials.Password)
+	}
+
+	buffer.out()
+	buffer.header("Connect repository")
+
+	cliInvocation := fmt.Sprintf("kopia repository connect s3 --bucket=\"%s\" --access-key=\"%s\" --secret-access-key=\"%s\" --password=\"%s\" --endpoint=\"%s\" --region=\"%s\"",
+		kopiaCredentials.KopiaS3.Bucket,
+		buffer.env("AWS_ACCESS_KEY_ID"),
+		buffer.env("AWS_SECRET_ACCESS_KEY"),
+		buffer.env("KOPIA_PASSWORD"),
+		kopiaCredentials.KopiaS3.Endpoint,
+		kopiaCredentials.KopiaS3.Region)
+
+	buffer.out(cliInvocation)
+
+	if len(config.GlobalExcludes) > 0 {
+		cliInvocation = fmt.Sprintf("kopia policy set --global %s", buffer.env("EXCLUDES"))
+		buffer.out(cliInvocation)
+	}
+
+	// Build
+	if len(kopiaPolicyExcludes) > 0 {
+		buffer.out()
+		buffer.header("Add policy excludes")
+
+		for backupPath, excludes := range kopiaPolicyExcludes {
+
+			if len(excludes) == 0 {
+				continue
+			}
+
+			excludesStr := ""
+			for _, exclude := range excludes {
+				excludesStr += "--add-ignore \"" + exclude + "\" "
+			}
+			excludesStr = strings.TrimSpace(excludesStr)
+
+			cliInvocation = fmt.Sprintf("kopia policy set %s \"%s\"", excludesStr, backupPath)
+			buffer.out(cliInvocation)
+		}
+	}
+
+	buffer.out()
+	buffer.header("Create snapshot")
+
+	descriptionSubstring := ""
+	if config.Metadata != nil && config.Metadata.Name != "" {
+		description := config.Metadata.Name
+
+		if config.Metadata.AppendDateTime {
+			description += buffer.env("BACKUP_DATE_TIME")
+		}
+
+		descriptionSubstring = fmt.Sprintf("--description=\"%s\" ", description)
+	}
+
+	cliInvocation = fmt.Sprintf("kopia snapshot create %s%s",
+		descriptionSubstring,
+		buffer.env("TODO"))
+
+	if buffer.isWindows {
+		buffer.out(cliInvocation)
+	} else {
+		buffer.out("bash -c \"" + cliInvocation + "\"")
+	}
+
+	return nil
 }
 
 func tarsnapGenerateInvocation(config model.ConfigFile, dryRun bool, buffer *OutputBuffer) error {
