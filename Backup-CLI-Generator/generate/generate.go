@@ -151,7 +151,6 @@ func checkMonitorFolders(configFilePath string, config model.ConfigFile) error {
 				}
 				fmt.Println("      - " + rel + "  # " + ubPath)
 			}
-
 			fmt.Println()
 
 			return fmt.Errorf("monitor folder contained un-backed-up path: %v", unbackedupPaths)
@@ -548,7 +547,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 
 	} else if configType == model.Kopia {
 
-		// USes TODO, BACKUP_DATE_TIME, EXCLUDES, from above
+		// Uses TODO, BACKUP_DATE_TIME, EXCLUDES, from above
 		err = kopiaGenerateInvocation(kopiaPolicyExcludes, config, &buffer)
 		if err != nil {
 			return nil, err
@@ -556,33 +555,9 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 
 	} else if configType == model.Robocopy {
 
-		robocopyCredentials, err := config.GetRobocopyCredential()
+		err := robocopyGenerateInvocation(config, robocopyFolders, &buffer)
 		if err != nil {
 			return nil, err
-		}
-
-		if robocopyCredentials.DestinationFolder == "" {
-			return nil, errors.New("missing destination folder")
-		}
-
-		if robocopyCredentials.Switches == "" {
-			return nil, errors.New("missing switches")
-		}
-
-		if config.Metadata != nil && (config.Metadata.Name != "" || config.Metadata.AppendDateTime) {
-			return nil, fmt.Errorf("metadata features are not supported with robocopy")
-		}
-
-		if _, err := os.Stat(robocopyCredentials.DestinationFolder); os.IsNotExist(err) {
-			return nil, fmt.Errorf("robocopy destination folder does not exist: '%s'", robocopyCredentials.DestinationFolder)
-		}
-
-		buffer.setEnv("SWITCHES", robocopyCredentials.Switches)
-
-		for _, folderTuple := range robocopyFolders {
-			srcFolder := fixWindowsPathSuffix("\"" + folderTuple[0] + "\"")
-			destFolder := fixWindowsPathSuffix("\"" + folderTuple[1] + "\"")
-			buffer.out(fmt.Sprintf("robocopy %s %s %s", srcFolder, destFolder, buffer.env("SWITCHES")))
 		}
 
 	} else {
@@ -594,6 +569,40 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 	buffer.out("backup-cli check \"" + configFilePath + "\" " + buffer.env("SCRIPTPATH"))
 
 	return &buffer, nil
+}
+
+func robocopyGenerateInvocation(config model.ConfigFile, robocopyFolders [][]string, buffer *OutputBuffer) error {
+
+	robocopyCredentials, err := config.GetRobocopyCredential()
+	if err != nil {
+		return err
+	}
+
+	if robocopyCredentials.DestinationFolder == "" {
+		return errors.New("missing destination folder")
+	}
+
+	if robocopyCredentials.Switches == "" {
+		return errors.New("missing switches")
+	}
+
+	if config.Metadata != nil && (config.Metadata.Name != "" || config.Metadata.AppendDateTime) {
+		return fmt.Errorf("metadata features are not supported with robocopy")
+	}
+
+	if _, err := os.Stat(robocopyCredentials.DestinationFolder); os.IsNotExist(err) {
+		return fmt.Errorf("robocopy destination folder does not exist: '%s'", robocopyCredentials.DestinationFolder)
+	}
+
+	buffer.setEnv("SWITCHES", robocopyCredentials.Switches)
+
+	for _, folderTuple := range robocopyFolders {
+		srcFolder := fixWindowsPathSuffix("\"" + folderTuple[0] + "\"")
+		destFolder := fixWindowsPathSuffix("\"" + folderTuple[1] + "\"")
+		buffer.out(fmt.Sprintf("robocopy %s %s %s", srcFolder, destFolder, buffer.env("SWITCHES")))
+	}
+
+	return nil
 }
 
 func kopiaGenerateInvocation(kopiaPolicyExcludes map[string][]string, config model.ConfigFile, buffer *OutputBuffer) error {
