@@ -7,6 +7,7 @@ import (
 
 	"github.com/jgwest/backup-cli/generate"
 	"github.com/jgwest/backup-cli/model"
+	"github.com/jgwest/backup-cli/util"
 	"gopkg.in/yaml.v2"
 
 	"github.com/sergi/go-diff/diffmatchpatch"
@@ -15,7 +16,7 @@ import (
 func RunCheck(configFilePath string, shellScriptPath string) error {
 
 	// Process the configuration file
-	var out *generate.OutputBuffer
+	var out *util.OutputBuffer
 	{
 		content, err := ioutil.ReadFile(configFilePath)
 		if err != nil {
