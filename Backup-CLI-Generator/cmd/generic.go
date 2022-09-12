@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/jgwest/backup-cli/generic"
 	"github.com/spf13/cobra"
 )
 
@@ -19,14 +20,12 @@ to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 
 		pathToConfigFile := args[0]
-		fmt.Println(pathToConfigFile)
+		outputPath := args[1]
 
-		// outputPath := args[1]
-
-		// err := generate.RunGenerate(pathToConfigFile, outputPath)
-		// if err != nil {
-		// 	fmt.Println(err)
-		// }
+		err := generic.RunGeneric(pathToConfigFile, outputPath)
+		if err != nil {
+			fmt.Println(err)
+		}
 	},
 }
 

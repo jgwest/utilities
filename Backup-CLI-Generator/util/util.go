@@ -3,6 +3,7 @@ package util
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/jgwest/backup-cli/model"
@@ -163,4 +164,34 @@ func (buffer *OutputBuffer) Out(str ...string) {
 	}
 
 	buffer.Lines = append(buffer.Lines, str...)
+}
+
+// expand returns the input string, replacing $var with config file substitutions, or env vars, in that order.
+func Expand(input string, configFileSubstitutions []model.Substitution) (output string, err error) {
+
+	substitutions := map[string]string{}
+
+	for _, substitution := range configFileSubstitutions {
+		substitutions[substitution.Name] = substitution.Value
+	}
+
+	output = os.Expand(input, func(key string) string {
+
+		if val, contains := substitutions[key]; contains {
+			return val
+		}
+
+		if value, contains := os.LookupEnv(key); contains {
+			return value
+		}
+
+		if err == nil {
+			err = fmt.Errorf("unable to find value for '%s'", key)
+		}
+
+		return ""
+
+	})
+
+	return
 }

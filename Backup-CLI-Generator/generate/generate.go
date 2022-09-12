@@ -71,7 +71,7 @@ func checkMonitorFolders(configFilePath string, config model.ConfigFile) error {
 	expandedBackupPaths := []string{}
 	for _, folder := range config.Folders {
 
-		expandedPath, err := expand(folder.Path, config.Substitutions)
+		expandedPath, err := util.Expand(folder.Path, config.Substitutions)
 		if err != nil {
 			return err
 		}
@@ -85,7 +85,7 @@ func checkMonitorFolders(configFilePath string, config model.ConfigFile) error {
 
 	for _, monitorFolder := range config.MonitorFolders {
 
-		monitorPath, err := expand(monitorFolder.Path, config.Substitutions)
+		monitorPath, err := util.Expand(monitorFolder.Path, config.Substitutions)
 		if err != nil {
 			return err
 		}
@@ -208,7 +208,6 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 				buffer.Out("BACKUP_DATE_TIME=`date +%F_%H:%M:%S`")
 			}
 		}
-
 	}
 
 	// Populate EXCLUDES var, by processing Global Excludes
@@ -228,7 +227,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 				substring = buffer.Env("EXCLUDES") + " "
 			}
 
-			expandedValue, err := expand(exclude, config.Substitutions)
+			expandedValue, err := util.Expand(exclude, config.Substitutions)
 			if err != nil {
 				return nil, err
 			}
@@ -269,7 +268,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 				substring = buffer.Env("EXCLUDES") + " "
 			}
 
-			expandedValue, err := expand(excludeFile, config.Substitutions)
+			expandedValue, err := util.Expand(excludeFile, config.Substitutions)
 			if err != nil {
 				return nil, err
 			}
@@ -287,7 +286,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 				substring = buffer.Env("EXCLUDES") + " "
 			}
 
-			expandedValue, err := expand(excludeDir, config.Substitutions)
+			expandedValue, err := util.Expand(excludeDir, config.Substitutions)
 			if err != nil {
 				return nil, err
 			}
@@ -770,7 +769,7 @@ func resticGenerateInvocation(config model.ConfigFile, buffer *util.OutputBuffer
 
 	cacertSubstring := ""
 	if resticCredential.CACert != "" {
-		expandedPath, err := expand(resticCredential.CACert, config.Substitutions)
+		expandedPath, err := util.Expand(resticCredential.CACert, config.Substitutions)
 		if err != nil {
 			return err
 		}
@@ -901,7 +900,7 @@ func populateProcessedFolders(configType model.ConfigType, configFolders []model
 			return nil, fmt.Errorf("backup utility '%s' does not support robocopy folder entries", configType)
 		}
 
-		srcFolderPath, err := expand(folder.Path, configFileSubstitutions)
+		srcFolderPath, err := util.Expand(folder.Path, configFileSubstitutions)
 		if err != nil {
 			return nil, err
 		}
@@ -929,34 +928,4 @@ func populateProcessedFolders(configType model.ConfigType, configFolders []model
 
 	return processedFolders, nil
 
-}
-
-// expand returns the input string, replacing $var with config file substitutions, or env vars, in that order.
-func expand(input string, configFileSubstitutions []model.Substitution) (output string, err error) {
-
-	substitutions := map[string]string{}
-
-	for _, substitution := range configFileSubstitutions {
-		substitutions[substitution.Name] = substitution.Value
-	}
-
-	output = os.Expand(input, func(key string) string {
-
-		if val, contains := substitutions[key]; contains {
-			return val
-		}
-
-		if value, contains := os.LookupEnv(key); contains {
-			return value
-		}
-
-		if err == nil {
-			err = fmt.Errorf("unable to find value for '%s'", key)
-		}
-
-		return ""
-
-	})
-
-	return
 }
