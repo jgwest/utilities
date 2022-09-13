@@ -29,7 +29,7 @@ func RunGeneric(path string, outputPath string) error {
 		return err
 	}
 
-	result, err := ProcessConfig(path, model, false)
+	result, err := ProcessConfig2(path, model, false)
 	if err != nil {
 		return err
 	}
@@ -39,13 +39,52 @@ func RunGeneric(path string, outputPath string) error {
 		return fmt.Errorf("output path already exists: %s", outputPath)
 	}
 
-	if err := ioutil.WriteFile(outputPath, []byte(result.ToString()), 0700); err != nil {
-		return err
-	}
+	// if err := ioutil.WriteFile(outputPath, []byte(result), 0700); err != nil {
+	// 	return err
+	// }
 
-	fmt.Println(result.ToString())
+	fmt.Println("output: " + result)
 
 	return nil
+
+}
+
+func ProcessConfig2(configFilePath string, config model.ConfigFile, dryRun bool) (string, error) {
+
+	configType, err := config.GetConfigType()
+	if err != nil {
+		return "", err
+	}
+
+	nodes := util.NewTextNodes()
+
+	prefixNode := nodes.NewPrefixTextNode()
+
+	if nodes.IsWindows() {
+		// https://stackoverflow.com/questions/17063947/get-current-batchfile-directory
+		prefixNode.Out("@echo off", "setlocal")
+		prefixNode.Out("set SCRIPTPATH=\"%~f0\"")
+	} else {
+		prefixNode.Out("#!/bin/bash", "", "set -eu")
+		// https://stackoverflow.com/questions/4774054/reliable-way-for-a-bash-script-to-get-the-full-path-to-itself
+		prefixNode.Out("SCRIPTPATH=`realpath -s $0`")
+	}
+
+	if configType == model.Restic {
+		err = resticGenerateGenericInvocation2(config, nodes)
+	} else if configType == model.Kopia {
+		// 	err = kopiaGenerateGenericInvocation(config, &buffer)
+		// } else if configType == model.Tarsnap {
+		// 	err = tarsnapGenerateGenericInvocation(config, &buffer)
+		// } else {
+		return "", fmt.Errorf("unsupported configType: %v", configType)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	return nodes.ToString()
 
 }
 
@@ -74,6 +113,8 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 		err = resticGenerateGenericInvocation(config, &buffer)
 	} else if configType == model.Kopia {
 		err = kopiaGenerateGenericInvocation(config, &buffer)
+	} else if configType == model.Tarsnap {
+		err = tarsnapGenerateGenericInvocation(config, &buffer)
 	} else {
 		return nil, fmt.Errorf("unsupported configType: %v", configType)
 	}
@@ -144,6 +185,88 @@ func kopiaGenerateGenericInvocation(config model.ConfigFile, buffer *util.Output
 	return nil
 }
 
+func resticGenerateGenericInvocation2(config model.ConfigFile, textNodes *util.TextNodes) error {
+
+	resticCredential, err := config.GetResticCredential()
+	if err != nil {
+		return err
+	}
+
+	// Build credentials nodes
+	credentials := textNodes.NewTextNode()
+	{
+		credentials.Out()
+		credentials.Header("Credentials")
+		if resticCredential.S3 != nil {
+			// credentials.Out()
+			// credentials.Header("Credentials")
+			credentials.SetEnv("AWS_ACCESS_KEY_ID", resticCredential.S3.AccessKeyID)
+			credentials.SetEnv("AWS_SECRET_ACCESS_KEY", resticCredential.S3.SecretAccessKey)
+		}
+
+		if len(resticCredential.Password) > 0 && len(resticCredential.PasswordFile) > 0 {
+			return errors.New("both password and password file are specified")
+		}
+
+		if len(resticCredential.Password) > 0 {
+			credentials.SetEnv("RESTIC_PASSWORD", resticCredential.Password)
+
+		} else if len(resticCredential.PasswordFile) > 0 {
+			credentials.SetEnv("RESTIC_PASSWORD_FILE", resticCredential.PasswordFile)
+
+		} else {
+			return errors.New("no restic password found")
+		}
+	}
+
+	invocation := textNodes.NewTextNode()
+	invocation.AddDependency(credentials)
+
+	invocation.Out()
+	invocation.Header("Invocation")
+
+	url := ""
+	if resticCredential.S3 != nil {
+		url = "s3:" + resticCredential.S3.URL
+	} else if resticCredential.RESTEndpoint != "" {
+		url = "rest:" + resticCredential.RESTEndpoint
+	} else {
+		return errors.New("unable to locate connection credentials")
+	}
+
+	cacertSubstring := ""
+	if resticCredential.CACert != "" {
+		expandedPath, err := util.Expand(resticCredential.CACert, config.Substitutions)
+		if err != nil {
+			return err
+		}
+		cacertSubstring = "--cacert \"" + expandedPath + "\" "
+	}
+
+	additionalParams := ""
+	if textNodes.IsWindows() {
+		additionalParams = "%*"
+
+	} else {
+		additionalParams = "$*"
+	}
+
+	cliInvocation := fmt.Sprintf("restic -r %s --verbose %s %s",
+		url,
+		cacertSubstring,
+		additionalParams)
+
+	invocation.Out()
+
+	if textNodes.IsWindows() {
+		invocation.Out(cliInvocation)
+	} else {
+		invocation.Out("bash -c \"" + cliInvocation + "\"")
+	}
+
+	return nil
+}
+
 func resticGenerateGenericInvocation(config model.ConfigFile, buffer *util.OutputBuffer) error {
 
 	resticCredential, err := config.GetResticCredential()
@@ -200,6 +323,40 @@ func resticGenerateGenericInvocation(config model.ConfigFile, buffer *util.Outpu
 	cliInvocation := fmt.Sprintf("restic -r %s --verbose %s %s",
 		url,
 		cacertSubstring,
+		additionalParams)
+
+	buffer.Out()
+
+	if buffer.IsWindows {
+		buffer.Out(cliInvocation)
+	} else {
+		buffer.Out("bash -c \"" + cliInvocation + "\"")
+	}
+
+	return nil
+}
+
+func tarsnapGenerateGenericInvocation(config model.ConfigFile, buffer *util.OutputBuffer) error {
+
+	tarsnapCredentials, err := config.GetTarsnapCredential()
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(tarsnapCredentials.ConfigFilePath); os.IsNotExist(err) {
+		return fmt.Errorf("tarsnap config path does not exist: '%s'", tarsnapCredentials.ConfigFilePath)
+	}
+
+	additionalParams := ""
+	if buffer.IsWindows {
+		additionalParams = "%*"
+	} else {
+		additionalParams = "$*"
+	}
+
+	cliInvocation := fmt.Sprintf(
+		"tarsnap --humanize-numbers --configfile \"%s\" %s",
+		tarsnapCredentials.ConfigFilePath,
 		additionalParams)
 
 	buffer.Out()
