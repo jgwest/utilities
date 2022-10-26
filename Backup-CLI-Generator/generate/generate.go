@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/jgwest/backup-cli/generic"
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
 	"gopkg.in/yaml.v2"
@@ -490,7 +491,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 	if configType == model.Restic {
 
 		// Uses the 'TODO' env var, generated above, to know what to backup.
-		err = resticGenerateInvocation(config, &buffer)
+		err = resticGenerateInvocation2(config, &buffer)
 		if err != nil {
 			return nil, err
 		}
@@ -711,89 +712,185 @@ func tarsnapGenerateInvocation(config model.ConfigFile, dryRun bool, buffer *uti
 	return nil
 }
 
+func resticGenerateInvocation2(config model.ConfigFile, buffer *util.OutputBuffer) error {
+
+	textNodes := util.NewTextNodes()
+
+	{
+		credentialsNode := textNodes.NewTextNode()
+
+		if err := generic.SharedGenerateResticCredentials(config, credentialsNode); err != nil {
+			return err
+		}
+	}
+
+	{
+		resticCredential, err := config.GetResticCredential()
+		if err != nil {
+			return err
+		}
+
+		invocationTextNode := textNodes.NewTextNode()
+
+		tagSubstring := ""
+		if config.Metadata != nil {
+			if len(config.Metadata.Name) == 0 {
+				return errors.New("metadata exists, but name is nil")
+			}
+
+			quote := "'"
+			if textNodes.IsWindows() {
+				quote = "\""
+			}
+
+			tagSubstring = fmt.Sprintf("--tag %s%s", quote, config.Metadata.Name)
+			if config.Metadata.AppendDateTime {
+				tagSubstring += invocationTextNode.Env("BACKUP_DATE_TIME")
+			}
+
+			tagSubstring += quote + " "
+		}
+
+		url := ""
+		if resticCredential.S3 != nil {
+			url = "s3:" + resticCredential.S3.URL
+		} else if resticCredential.RESTEndpoint != "" {
+			url = "rest:" + resticCredential.RESTEndpoint
+		} else {
+			return errors.New("unable to locate connection credentials")
+		}
+
+		cacertSubstring := ""
+		if resticCredential.CACert != "" {
+			expandedPath, err := util.Expand(resticCredential.CACert, config.Substitutions)
+			if err != nil {
+				return err
+			}
+			cacertSubstring = "--cacert \"" + expandedPath + "\" "
+		}
+
+		excludesSubstring := ""
+		if len(config.GlobalExcludes) > 0 {
+			excludesSubstring = invocationTextNode.Env("EXCLUDES") + " "
+		}
+
+		cliInvocation := fmt.Sprintf("restic -r %s --verbose %s%s%s backup %s",
+			url,
+			tagSubstring,
+			cacertSubstring,
+			excludesSubstring,
+			invocationTextNode.Env("TODO"))
+
+		invocationTextNode.Out()
+
+		if textNodes.IsWindows() {
+			invocationTextNode.Out(cliInvocation)
+		} else {
+			invocationTextNode.Out("bash -c \"" + cliInvocation + "\"")
+		}
+	}
+
+	if err := textNodes.ExportTo(buffer); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func resticGenerateInvocation(config model.ConfigFile, buffer *util.OutputBuffer) error {
+
+	textNodes := util.NewTextNodes()
+	textNode := textNodes.NewTextNode()
+
+	if err := generic.SharedGenerateResticCredentials(config, textNode); err != nil {
+		return err
+	}
+
+	textNode.ExportTo(buffer)
 
 	resticCredential, err := config.GetResticCredential()
 	if err != nil {
 		return err
 	}
 
-	if resticCredential.S3 != nil {
+	// if resticCredential.S3 != nil {
+	// 	buffer.Out()
+	// 	buffer.Header("Credentials ")
+	// 	buffer.SetEnv("AWS_ACCESS_KEY_ID", resticCredential.S3.AccessKeyID)
+	// 	buffer.SetEnv("AWS_SECRET_ACCESS_KEY", resticCredential.S3.SecretAccessKey)
+	// }
+
+	// if len(resticCredential.Password) > 0 && len(resticCredential.PasswordFile) > 0 {
+	// 	return errors.New("both password and password file are specified")
+	// }
+
+	// if len(resticCredential.Password) > 0 {
+	// 	buffer.SetEnv("RESTIC_PASSWORD", resticCredential.Password)
+
+	// } else if len(resticCredential.PasswordFile) > 0 {
+	// 	buffer.SetEnv("RESTIC_PASSWORD_FILE", resticCredential.PasswordFile)
+
+	// } else {
+	// 	return errors.New("no restic password found")
+	// }
+
+	{
+		tagSubstring := ""
+		if config.Metadata != nil {
+			if len(config.Metadata.Name) == 0 {
+				return errors.New("metadata exists, but name is nil")
+			}
+
+			quote := "'"
+			if buffer.IsWindows {
+				quote = "\""
+			}
+
+			tagSubstring = fmt.Sprintf("--tag %s%s", quote, config.Metadata.Name)
+			if config.Metadata.AppendDateTime {
+				tagSubstring += buffer.Env("BACKUP_DATE_TIME")
+			}
+
+			tagSubstring += quote + " "
+		}
+
+		url := ""
+		if resticCredential.S3 != nil {
+			url = "s3:" + resticCredential.S3.URL
+		} else if resticCredential.RESTEndpoint != "" {
+			url = "rest:" + resticCredential.RESTEndpoint
+		} else {
+			return errors.New("unable to locate connection credentials")
+		}
+
+		cacertSubstring := ""
+		if resticCredential.CACert != "" {
+			expandedPath, err := util.Expand(resticCredential.CACert, config.Substitutions)
+			if err != nil {
+				return err
+			}
+			cacertSubstring = "--cacert \"" + expandedPath + "\" "
+		}
+
+		excludesSubstring := ""
+		if len(config.GlobalExcludes) > 0 {
+			excludesSubstring = buffer.Env("EXCLUDES") + " "
+		}
+
+		cliInvocation := fmt.Sprintf("restic -r %s --verbose %s%s%s backup %s",
+			url,
+			tagSubstring,
+			cacertSubstring,
+			excludesSubstring,
+			buffer.Env("TODO"))
+
 		buffer.Out()
-		buffer.Header("Credentials ")
-		buffer.SetEnv("AWS_ACCESS_KEY_ID", resticCredential.S3.AccessKeyID)
-		buffer.SetEnv("AWS_SECRET_ACCESS_KEY", resticCredential.S3.SecretAccessKey)
-	}
 
-	if len(resticCredential.Password) > 0 && len(resticCredential.PasswordFile) > 0 {
-		return errors.New("both password and password file are specified")
-	}
-
-	if len(resticCredential.Password) > 0 {
-		buffer.SetEnv("RESTIC_PASSWORD", resticCredential.Password)
-
-	} else if len(resticCredential.PasswordFile) > 0 {
-		buffer.SetEnv("RESTIC_PASSWORD_FILE", resticCredential.PasswordFile)
-
-	} else {
-		return errors.New("no restic password found")
-	}
-
-	tagSubstring := ""
-	if config.Metadata != nil {
-		if len(config.Metadata.Name) == 0 {
-			return errors.New("metadata exists, but name is nil")
-		}
-
-		quote := "'"
 		if buffer.IsWindows {
-			quote = "\""
+			buffer.Out(cliInvocation)
+		} else {
+			buffer.Out("bash -c \"" + cliInvocation + "\"")
 		}
-
-		tagSubstring = fmt.Sprintf("--tag %s%s", quote, config.Metadata.Name)
-		if config.Metadata.AppendDateTime {
-			tagSubstring += buffer.Env("BACKUP_DATE_TIME")
-		}
-
-		tagSubstring += quote + " "
-	}
-
-	url := ""
-	if resticCredential.S3 != nil {
-		url = "s3:" + resticCredential.S3.URL
-	} else if resticCredential.RESTEndpoint != "" {
-		url = "rest:" + resticCredential.RESTEndpoint
-	} else {
-		return errors.New("unable to locate connection credentials")
-	}
-
-	cacertSubstring := ""
-	if resticCredential.CACert != "" {
-		expandedPath, err := util.Expand(resticCredential.CACert, config.Substitutions)
-		if err != nil {
-			return err
-		}
-		cacertSubstring = "--cacert \"" + expandedPath + "\" "
-	}
-
-	excludesSubstring := ""
-	if len(config.GlobalExcludes) > 0 {
-		excludesSubstring = buffer.Env("EXCLUDES") + " "
-	}
-
-	cliInvocation := fmt.Sprintf("restic -r %s --verbose %s%s%s backup %s",
-		url,
-		tagSubstring,
-		cacertSubstring,
-		excludesSubstring,
-		buffer.Env("TODO"))
-
-	buffer.Out()
-
-	if buffer.IsWindows {
-		buffer.Out(cliInvocation)
-	} else {
-		buffer.Out("bash -c \"" + cliInvocation + "\"")
 	}
 
 	return nil

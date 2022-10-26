@@ -67,6 +67,21 @@ func (tn *TextNodes) NewTextNode() *TextNode {
 	return res
 }
 
+func (tn *TextNodes) ExportTo(buffer *OutputBuffer) error {
+
+	if res, err := tn.ToStringWithParams(true); err != nil {
+
+		return err
+
+	} else {
+		for _, line := range strings.Split(strings.ReplaceAll(res, "\r\n", "\n"), "\n") {
+			buffer.Out(line)
+		}
+	}
+
+	return nil
+}
+
 func (textnode *TextNode) Out(str ...string) {
 	if len(str) == 0 {
 		str = []string{""}
@@ -91,7 +106,7 @@ func (textnode *TextNode) AddRequires(str ...string) {
 	}
 
 	for _, key := range str {
-		textnode.requires[key] = ""
+		textnode.requires[key] = key
 	}
 
 }
@@ -138,6 +153,13 @@ func (textnode *TextNode) Header(str string) {
 
 }
 
+func (textnode *TextNode) ExportTo(buffer *OutputBuffer) {
+
+	for _, line := range textnode.lines {
+		buffer.Out(line)
+	}
+}
+
 func (textnode *TextNode) ToString() string {
 	output := ""
 
@@ -160,6 +182,11 @@ func (tn *TextNodes) IsWindows() bool {
 }
 
 func (tn TextNodes) ToString() (string, error) {
+
+	return tn.ToStringWithParams(false)
+}
+
+func (tn TextNodes) ToStringWithParams(allowUnresolved bool) (string, error) {
 	var res string
 
 	// Variable name -> Child text node id
@@ -198,10 +225,13 @@ func (tn TextNodes) ToString() (string, error) {
 
 				parentNode, exists := exportedVars[requiredVar]
 				if !exists {
-					return "", fmt.Errorf("child text node requires unexported variable: %v", requiredVar)
+					if !allowUnresolved {
+						return "", fmt.Errorf("child text node requires unexported variable: %v", requiredVar)
+					}
+				} else {
+					childDependencies[parentNode] = parentNode
 				}
 
-				childDependencies[parentNode] = parentNode
 			}
 
 			var allChildDependencies []string
@@ -288,10 +318,14 @@ func (tn *TextNodes) nextChildID() string {
 	return id
 }
 
-// func (buffer *TextNode) Env(envName string) string {
-// 	if buffer.isWindows {
-// 		return "%" + envName + "%"
-// 	} else {
-// 		return "${" + envName + "}"
-// 	}
-// }
+func (buffer *TextNode) Env(envName string) string {
+
+	buffer.AddRequires(envName)
+
+	if buffer.parent.IsWindows() {
+		return "%" + envName + "%"
+	} else {
+		return "${" + envName + "}"
+	}
+
+}
