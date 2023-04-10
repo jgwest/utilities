@@ -334,50 +334,6 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 			return nil, fmt.Errorf("unable to populateProcessedFolder: %v", err)
 		}
 
-		// // Populate processedFolders with list of folders to backup, and perform sanity tests
-		// {
-		// 	checkDupesMap := map[string] /* source folder path -> not used */ interface{}{}
-		// 	for _, folder := range config.Folders {
-
-		// 		if len(folder.Excludes) != 0 &&
-		// 			(configType == model.Restic ||
-		// 				configType == model.Tarsnap ||
-		// 				configType == model.Kopia ||
-		// 				configFilePath == model.Robocopy) {
-		// 			return nil, fmt.Errorf("backup utility '%s' does not support local excludes", configType)
-		// 		}
-
-		// 		if folder.Robocopy != nil && configType != model.Robocopy {
-		// 			return nil, fmt.Errorf("backup utility '%s' does not support robocopy folder entries", configType)
-		// 		}
-
-		// 		srcFolderPath, err := expand(folder.Path, config.Substitutions)
-		// 		if err != nil {
-		// 			return nil, err
-		// 		}
-
-		// 		if _, err := os.Stat(srcFolderPath); os.IsNotExist(err) {
-		// 			return nil, fmt.Errorf("path does not exist: '%s'", srcFolderPath)
-		// 		}
-
-		// 		if _, contains := checkDupesMap[srcFolderPath]; contains {
-		// 			return nil, fmt.Errorf("backup path list contains duplicate path: '%s'", srcFolderPath)
-		// 		}
-
-		// 		if len(folder.Excludes) != 0 &&
-		// 			(configType == model.Restic ||
-		// 				configType == model.Tarsnap ||
-		// 				configType == model.Robocopy) {
-		// 			return nil, fmt.Errorf("backup utility '%s' does not support local excludes", configType)
-
-		// 		} else if configType == model.Kopia {
-		// 			kopiaPolicyExcludes[srcFolderPath] = append(kopiaPolicyExcludes[srcFolderPath], folder.Excludes...)
-		// 		}
-
-		// 		processedFolders = append(processedFolders, []interface{}{srcFolderPath, folder})
-		// 	}
-		// }
-
 		// Everything except robocopy
 		if configType == model.Kopia || configType == model.Restic || configType == model.Tarsnap {
 			for index, processedFolder := range processedFolders {
@@ -409,35 +365,6 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 			if err := robocopyValidateBasenames(processedFolders); err != nil {
 				return nil, err
 			}
-			//
-			// {
-			// 	basenameMap := map[string]string{}
-			// 	for _, robocopyFolder := range processedFolders {
-
-			// 		robocopyFolderPath, ok := (robocopyFolder[0]).(string)
-			// 		if !ok {
-			// 			return nil, fmt.Errorf("invalid robocopyFolderPath")
-			// 		}
-
-			// 		folderEntry, ok := (robocopyFolder[1]).(model.Folder)
-			// 		if !ok {
-			// 			return nil, fmt.Errorf("invalid robocopyFolder")
-			// 		}
-
-			// 		// Use the name of the src folder as the dest folder name, unless
-			// 		// a replacement is specified in the folder entry.
-			// 		destFolderName := filepath.Base(robocopyFolderPath)
-			// 		if folderEntry.Robocopy != nil && folderEntry.Robocopy.DestFolderName != "" {
-			// 			destFolderName = folderEntry.Robocopy.DestFolderName
-			// 		}
-
-			// 		if _, contains := basenameMap[destFolderName]; contains {
-			// 			return nil, fmt.Errorf("multiple folders share the same base name: %s", destFolderName)
-			// 		}
-
-			// 		basenameMap[destFolderName] = destFolderName
-			// 	}
-			// }
 
 			if robocopyCredentials, err := config.GetRobocopyCredential(); err == nil {
 
@@ -449,38 +376,6 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 			} else {
 				return nil, err
 			}
-
-			// targetFolder := robocopyCredentials.DestinationFolder
-
-			// for _, robocopyFolder := range processedFolders {
-
-			// 	robocopySrcFolderPath, ok := (robocopyFolder[0]).(string)
-			// 	if !ok {
-			// 		return nil, fmt.Errorf("invalid robocopyFolderPath")
-			// 	}
-
-			// 	folderEntry, ok := (robocopyFolder[1]).(model.Folder)
-			// 	if !ok {
-			// 		return nil, fmt.Errorf("invalid robocopyFolder")
-			// 	}
-
-			// 	// Use the name of the src folder as the dest folder name, unless
-			// 	// a replacement is specified in the folder entry.
-			// 	destFolderName := filepath.Base(robocopySrcFolderPath)
-			// 	if folderEntry.Robocopy != nil && folderEntry.Robocopy.DestFolderName != "" {
-			// 		destFolderName = folderEntry.Robocopy.DestFolderName
-			// 	}
-
-			// 	// tuple:
-			// 	// - source folder path
-			// 	// - destination folder with basename of source folder appended
-			// 	tuple := []string{robocopySrcFolderPath, filepath.Join(targetFolder, destFolderName)}
-
-			// 	// fmt.Println("- ["+robocopySrcFolderPath+"]", "["+filepath.Join(targetFolder, destFolderName)+"]")
-
-			// 	robocopyFolders = append(robocopyFolders, tuple)
-
-			// }
 
 		} else { // end robocopy section
 			return nil, errors.New("unrecognized config type")
@@ -499,7 +394,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 	} else if configType == model.Tarsnap {
 
 		// Uses TODO, EXCLUDES, BACKUP_DATE_TIME, from above
-		err := tarsnapGenerateInvocation(config, dryRun, &buffer)
+		err := tarsnapGenerateInvocation2(config, dryRun, &buffer)
 		if err != nil {
 			return nil, err
 		}
@@ -507,14 +402,14 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 	} else if configType == model.Kopia {
 
 		// Uses TODO, BACKUP_DATE_TIME, EXCLUDES, from above
-		err = kopiaGenerateInvocation(kopiaPolicyExcludes, config, &buffer)
+		err = kopiaGenerateInvocation2(kopiaPolicyExcludes, config, &buffer)
 		if err != nil {
 			return nil, err
 		}
 
 	} else if configType == model.Robocopy {
 
-		err := robocopyGenerateInvocation(config, robocopyFolders, &buffer)
+		err := robocopyGenerateInvocation2(config, robocopyFolders, &buffer)
 		if err != nil {
 			return nil, err
 		}
@@ -530,7 +425,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 	return &buffer, nil
 }
 
-func robocopyGenerateInvocation(config model.ConfigFile, robocopyFolders [][]string, buffer *util.OutputBuffer) error {
+func robocopyGenerateInvocation2(config model.ConfigFile, robocopyFolders [][]string, buffer *util.OutputBuffer) error {
 
 	robocopyCredentials, err := config.GetRobocopyCredential()
 	if err != nil {
@@ -553,18 +448,61 @@ func robocopyGenerateInvocation(config model.ConfigFile, robocopyFolders [][]str
 		return fmt.Errorf("robocopy destination folder does not exist: '%s'", robocopyCredentials.DestinationFolder)
 	}
 
-	buffer.SetEnv("SWITCHES", robocopyCredentials.Switches)
+	textNodes := util.NewTextNodes()
+
+	textNode := textNodes.NewTextNode()
+
+	textNode.SetEnv("SWITCHES", robocopyCredentials.Switches)
 
 	for _, folderTuple := range robocopyFolders {
 		srcFolder := util.FixWindowsPathSuffix("\"" + folderTuple[0] + "\"")
 		destFolder := util.FixWindowsPathSuffix("\"" + folderTuple[1] + "\"")
-		buffer.Out(fmt.Sprintf("robocopy %s %s %s", srcFolder, destFolder, buffer.Env("SWITCHES")))
+		textNode.Out(fmt.Sprintf("robocopy %s %s %s", srcFolder, destFolder, textNode.Env("SWITCHES")))
 	}
+
+	textNodes.ExportTo(buffer)
 
 	return nil
 }
 
-func kopiaGenerateInvocation(kopiaPolicyExcludes map[string][]string, config model.ConfigFile, buffer *util.OutputBuffer) error {
+// func robocopyGenerateInvocation(config model.ConfigFile, robocopyFolders [][]string, buffer *util.OutputBuffer) error {
+
+// 	robocopyCredentials, err := config.GetRobocopyCredential()
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	if robocopyCredentials.DestinationFolder == "" {
+// 		return errors.New("missing destination folder")
+// 	}
+
+// 	if robocopyCredentials.Switches == "" {
+// 		return errors.New("missing switches")
+// 	}
+
+// 	if config.Metadata != nil && (config.Metadata.Name != "" || config.Metadata.AppendDateTime) {
+// 		return fmt.Errorf("metadata features are not supported with robocopy")
+// 	}
+
+// 	if _, err := os.Stat(robocopyCredentials.DestinationFolder); os.IsNotExist(err) {
+// 		return fmt.Errorf("robocopy destination folder does not exist: '%s'", robocopyCredentials.DestinationFolder)
+// 	}
+
+// 	buffer.SetEnv("SWITCHES", robocopyCredentials.Switches)
+
+// 	for _, folderTuple := range robocopyFolders {
+// 		srcFolder := util.FixWindowsPathSuffix("\"" + folderTuple[0] + "\"")
+// 		destFolder := util.FixWindowsPathSuffix("\"" + folderTuple[1] + "\"")
+// 		buffer.Out(fmt.Sprintf("robocopy %s %s %s", srcFolder, destFolder, buffer.Env("SWITCHES")))
+// 	}
+
+// 	return nil
+// }
+
+func kopiaGenerateInvocation2(kopiaPolicyExcludes map[string][]string, config model.ConfigFile, buffer *util.OutputBuffer) error {
+
+	textNodes := util.NewTextNodes()
+	textNode := textNodes.NewTextNode()
 
 	kopiaCredentials, err := config.GetKopiaCredential()
 	if err != nil {
@@ -587,37 +525,41 @@ func kopiaGenerateInvocation(kopiaPolicyExcludes map[string][]string, config mod
 		return fmt.Errorf("missing kopia password")
 	}
 
-	buffer.Out()
-	buffer.Header("Credentials ")
-	buffer.SetEnv("AWS_ACCESS_KEY_ID", kopiaCredentials.S3.AccessKeyID)
-	buffer.SetEnv("AWS_SECRET_ACCESS_KEY", kopiaCredentials.S3.SecretAccessKey)
+	credentialsNode := textNodes.NewTextNode()
+	{
 
-	if len(kopiaCredentials.Password) > 0 {
-		buffer.SetEnv("KOPIA_PASSWORD", kopiaCredentials.Password)
+		credentialsNode.Out()
+		credentialsNode.Header("Credentials ")
+		credentialsNode.SetEnv("AWS_ACCESS_KEY_ID", kopiaCredentials.S3.AccessKeyID)
+		credentialsNode.SetEnv("AWS_SECRET_ACCESS_KEY", kopiaCredentials.S3.SecretAccessKey)
+
+		if len(kopiaCredentials.Password) > 0 {
+			credentialsNode.SetEnv("KOPIA_PASSWORD", kopiaCredentials.Password)
+		}
 	}
 
-	buffer.Out()
-	buffer.Header("Connect repository")
+	textNode.Out()
+	textNode.Header("Connect repository")
 
 	cliInvocation := fmt.Sprintf("kopia repository connect s3 --bucket=\"%s\" --access-key=\"%s\" --secret-access-key=\"%s\" --password=\"%s\" --endpoint=\"%s\" --region=\"%s\"",
 		kopiaCredentials.KopiaS3.Bucket,
-		buffer.Env("AWS_ACCESS_KEY_ID"),
-		buffer.Env("AWS_SECRET_ACCESS_KEY"),
-		buffer.Env("KOPIA_PASSWORD"),
+		textNode.Env("AWS_ACCESS_KEY_ID"),
+		textNode.Env("AWS_SECRET_ACCESS_KEY"),
+		textNode.Env("KOPIA_PASSWORD"),
 		kopiaCredentials.KopiaS3.Endpoint,
 		kopiaCredentials.KopiaS3.Region)
 
-	buffer.Out(cliInvocation)
+	textNode.Out(cliInvocation)
 
 	if len(config.GlobalExcludes) > 0 {
-		cliInvocation = fmt.Sprintf("kopia policy set --global %s", buffer.Env("EXCLUDES"))
-		buffer.Out(cliInvocation)
+		cliInvocation = fmt.Sprintf("kopia policy set --global %s", textNode.Env("EXCLUDES"))
+		textNode.Out(cliInvocation)
 	}
 
 	// Build
 	if len(kopiaPolicyExcludes) > 0 {
-		buffer.Out()
-		buffer.Header("Add policy excludes")
+		textNode.Out()
+		textNode.Header("Add policy excludes")
 
 		for backupPath, excludes := range kopiaPolicyExcludes {
 
@@ -632,19 +574,19 @@ func kopiaGenerateInvocation(kopiaPolicyExcludes map[string][]string, config mod
 			excludesStr = strings.TrimSpace(excludesStr)
 
 			cliInvocation = fmt.Sprintf("kopia policy set %s \"%s\"", excludesStr, backupPath)
-			buffer.Out(cliInvocation)
+			textNode.Out(cliInvocation)
 		}
 	}
 
-	buffer.Out()
-	buffer.Header("Create snapshot")
+	textNode.Out()
+	textNode.Header("Create snapshot")
 
 	descriptionSubstring := ""
 	if config.Metadata != nil && config.Metadata.Name != "" {
 		description := config.Metadata.Name
 
 		if config.Metadata.AppendDateTime {
-			description += buffer.Env("BACKUP_DATE_TIME")
+			description += textNode.Env("BACKUP_DATE_TIME")
 		}
 
 		descriptionSubstring = fmt.Sprintf("--description=\"%s\" ", description)
@@ -652,18 +594,123 @@ func kopiaGenerateInvocation(kopiaPolicyExcludes map[string][]string, config mod
 
 	cliInvocation = fmt.Sprintf("kopia snapshot create %s%s",
 		descriptionSubstring,
-		buffer.Env("TODO"))
+		textNode.Env("TODO"))
 
-	if buffer.IsWindows {
-		buffer.Out(cliInvocation)
+	if textNodes.IsWindows() {
+		textNode.Out(cliInvocation)
 	} else {
-		buffer.Out("bash -c \"" + cliInvocation + "\"")
+		textNode.Out("bash -c \"" + cliInvocation + "\"")
 	}
+
+	textNodes.ExportTo(buffer)
 
 	return nil
 }
 
-func tarsnapGenerateInvocation(config model.ConfigFile, dryRun bool, buffer *util.OutputBuffer) error {
+// func kopiaGenerateInvocationOld(kopiaPolicyExcludes map[string][]string, config model.ConfigFile, buffer *util.OutputBuffer) error {
+
+// 	kopiaCredentials, err := config.GetKopiaCredential()
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	if kopiaCredentials.S3 == nil || kopiaCredentials.KopiaS3 == nil {
+// 		return fmt.Errorf("missing S3 credentials")
+// 	}
+
+// 	if kopiaCredentials.S3.AccessKeyID == "" || kopiaCredentials.S3.SecretAccessKey == "" {
+// 		return fmt.Errorf("missing S3 credential values")
+// 	}
+
+// 	if kopiaCredentials.KopiaS3.Bucket == "" || kopiaCredentials.KopiaS3.Region == "" || kopiaCredentials.KopiaS3.Endpoint == "" {
+// 		return fmt.Errorf("missing S3 credential values")
+// 	}
+
+// 	if kopiaCredentials.Password == "" {
+// 		return fmt.Errorf("missing kopia password")
+// 	}
+
+// 	buffer.Out()
+// 	buffer.Header("Credentials ")
+// 	buffer.SetEnv("AWS_ACCESS_KEY_ID", kopiaCredentials.S3.AccessKeyID)
+// 	buffer.SetEnv("AWS_SECRET_ACCESS_KEY", kopiaCredentials.S3.SecretAccessKey)
+
+// 	if len(kopiaCredentials.Password) > 0 {
+// 		buffer.SetEnv("KOPIA_PASSWORD", kopiaCredentials.Password)
+// 	}
+
+// 	buffer.Out()
+// 	buffer.Header("Connect repository")
+
+// 	cliInvocation := fmt.Sprintf("kopia repository connect s3 --bucket=\"%s\" --access-key=\"%s\" --secret-access-key=\"%s\" --password=\"%s\" --endpoint=\"%s\" --region=\"%s\"",
+// 		kopiaCredentials.KopiaS3.Bucket,
+// 		buffer.Env("AWS_ACCESS_KEY_ID"),
+// 		buffer.Env("AWS_SECRET_ACCESS_KEY"),
+// 		buffer.Env("KOPIA_PASSWORD"),
+// 		kopiaCredentials.KopiaS3.Endpoint,
+// 		kopiaCredentials.KopiaS3.Region)
+
+// 	buffer.Out(cliInvocation)
+
+// 	if len(config.GlobalExcludes) > 0 {
+// 		cliInvocation = fmt.Sprintf("kopia policy set --global %s", buffer.Env("EXCLUDES"))
+// 		buffer.Out(cliInvocation)
+// 	}
+
+// 	// Build
+// 	if len(kopiaPolicyExcludes) > 0 {
+// 		buffer.Out()
+// 		buffer.Header("Add policy excludes")
+
+// 		for backupPath, excludes := range kopiaPolicyExcludes {
+
+// 			if len(excludes) == 0 {
+// 				continue
+// 			}
+
+// 			excludesStr := ""
+// 			for _, exclude := range excludes {
+// 				excludesStr += "--add-ignore \"" + exclude + "\" "
+// 			}
+// 			excludesStr = strings.TrimSpace(excludesStr)
+
+// 			cliInvocation = fmt.Sprintf("kopia policy set %s \"%s\"", excludesStr, backupPath)
+// 			buffer.Out(cliInvocation)
+// 		}
+// 	}
+
+// 	buffer.Out()
+// 	buffer.Header("Create snapshot")
+
+// 	descriptionSubstring := ""
+// 	if config.Metadata != nil && config.Metadata.Name != "" {
+// 		description := config.Metadata.Name
+
+// 		if config.Metadata.AppendDateTime {
+// 			description += buffer.Env("BACKUP_DATE_TIME")
+// 		}
+
+// 		descriptionSubstring = fmt.Sprintf("--description=\"%s\" ", description)
+// 	}
+
+// 	cliInvocation = fmt.Sprintf("kopia snapshot create %s%s",
+// 		descriptionSubstring,
+// 		buffer.Env("TODO"))
+
+// 	if buffer.IsWindows {
+// 		buffer.Out(cliInvocation)
+// 	} else {
+// 		buffer.Out("bash -c \"" + cliInvocation + "\"")
+// 	}
+
+// 	return nil
+// }
+
+func tarsnapGenerateInvocation2(config model.ConfigFile, dryRun bool, buffer *util.OutputBuffer) error {
+
+	textNodes := util.NewTextNodes()
+
+	textNode := textNodes.NewTextNode()
 
 	tarsnapCredentials, err := config.GetTarsnapCredential()
 	if err != nil {
@@ -680,7 +727,7 @@ func tarsnapGenerateInvocation(config model.ConfigFile, dryRun bool, buffer *uti
 
 	backupName := config.Metadata.Name
 	if config.Metadata.AppendDateTime {
-		backupName += buffer.Env("BACKUP_DATE_TIME")
+		backupName += textNode.Env("BACKUP_DATE_TIME")
 	}
 
 	dryRunSubstring := ""
@@ -690,7 +737,7 @@ func tarsnapGenerateInvocation(config model.ConfigFile, dryRun bool, buffer *uti
 
 	excludesSubstring := ""
 	if len(config.GlobalExcludes) > 0 {
-		excludesSubstring = buffer.Env("EXCLUDES") + " "
+		excludesSubstring = textNode.Env("EXCLUDES") + " "
 	}
 
 	cliInvocation := fmt.Sprintf(
@@ -699,18 +746,69 @@ func tarsnapGenerateInvocation(config model.ConfigFile, dryRun bool, buffer *uti
 		dryRunSubstring,
 		excludesSubstring,
 		backupName,
-		buffer.Env("TODO"))
+		textNode.Env("TODO"))
 
-	buffer.Out()
+	textNode.Out()
 
-	if buffer.IsWindows {
-		buffer.Out(cliInvocation)
+	if textNodes.IsWindows() {
+		textNode.Out(cliInvocation)
 	} else {
-		buffer.Out("bash -c \"" + cliInvocation + "\"")
+		textNode.Out("bash -c \"" + cliInvocation + "\"")
 	}
+
+	textNodes.ExportTo(buffer)
 
 	return nil
 }
+
+// func tarsnapGenerateInvocationOld(config model.ConfigFile, dryRun bool, buffer *util.OutputBuffer) error {
+
+// 	tarsnapCredentials, err := config.GetTarsnapCredential()
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	if _, err := os.Stat(tarsnapCredentials.ConfigFilePath); os.IsNotExist(err) {
+// 		return fmt.Errorf("tarsnap config path does not exist: '%s'", tarsnapCredentials.ConfigFilePath)
+// 	}
+
+// 	if config.Metadata == nil || len(config.Metadata.Name) == 0 {
+// 		return fmt.Errorf("tarsnap requires a metadata name")
+// 	}
+
+// 	backupName := config.Metadata.Name
+// 	if config.Metadata.AppendDateTime {
+// 		backupName += buffer.Env("BACKUP_DATE_TIME")
+// 	}
+
+// 	dryRunSubstring := ""
+// 	if dryRun {
+// 		dryRunSubstring = "--dry-run "
+// 	}
+
+// 	excludesSubstring := ""
+// 	if len(config.GlobalExcludes) > 0 {
+// 		excludesSubstring = buffer.Env("EXCLUDES") + " "
+// 	}
+
+// 	cliInvocation := fmt.Sprintf(
+// 		"tarsnap --humanize-numbers --configfile \"%s\" -c %s%s -f \"%s\" %s",
+// 		tarsnapCredentials.ConfigFilePath,
+// 		dryRunSubstring,
+// 		excludesSubstring,
+// 		backupName,
+// 		buffer.Env("TODO"))
+
+// 	buffer.Out()
+
+// 	if buffer.IsWindows {
+// 		buffer.Out(cliInvocation)
+// 	} else {
+// 		buffer.Out("bash -c \"" + cliInvocation + "\"")
+// 	}
+
+// 	return nil
+// }
 
 func resticGenerateInvocation2(config model.ConfigFile, buffer *util.OutputBuffer) error {
 
@@ -797,104 +895,83 @@ func resticGenerateInvocation2(config model.ConfigFile, buffer *util.OutputBuffe
 	return nil
 }
 
-func resticGenerateInvocation(config model.ConfigFile, buffer *util.OutputBuffer) error {
+// func resticGenerateInvocation(config model.ConfigFile, buffer *util.OutputBuffer) error {
 
-	textNodes := util.NewTextNodes()
-	textNode := textNodes.NewTextNode()
+// 	textNodes := util.NewTextNodes()
+// 	textNode := textNodes.NewTextNode()
 
-	if err := generic.SharedGenerateResticCredentials(config, textNode); err != nil {
-		return err
-	}
+// 	if err := generic.SharedGenerateResticCredentials(config, textNode); err != nil {
+// 		return err
+// 	}
 
-	textNode.ExportTo(buffer)
+// 	textNode.ExportTo(buffer)
 
-	resticCredential, err := config.GetResticCredential()
-	if err != nil {
-		return err
-	}
+// 	resticCredential, err := config.GetResticCredential()
+// 	if err != nil {
+// 		return err
+// 	}
 
-	// if resticCredential.S3 != nil {
-	// 	buffer.Out()
-	// 	buffer.Header("Credentials ")
-	// 	buffer.SetEnv("AWS_ACCESS_KEY_ID", resticCredential.S3.AccessKeyID)
-	// 	buffer.SetEnv("AWS_SECRET_ACCESS_KEY", resticCredential.S3.SecretAccessKey)
-	// }
+// 	{
+// 		tagSubstring := ""
+// 		if config.Metadata != nil {
+// 			if len(config.Metadata.Name) == 0 {
+// 				return errors.New("metadata exists, but name is nil")
+// 			}
 
-	// if len(resticCredential.Password) > 0 && len(resticCredential.PasswordFile) > 0 {
-	// 	return errors.New("both password and password file are specified")
-	// }
+// 			quote := "'"
+// 			if buffer.IsWindows {
+// 				quote = "\""
+// 			}
 
-	// if len(resticCredential.Password) > 0 {
-	// 	buffer.SetEnv("RESTIC_PASSWORD", resticCredential.Password)
+// 			tagSubstring = fmt.Sprintf("--tag %s%s", quote, config.Metadata.Name)
+// 			if config.Metadata.AppendDateTime {
+// 				tagSubstring += buffer.Env("BACKUP_DATE_TIME")
+// 			}
 
-	// } else if len(resticCredential.PasswordFile) > 0 {
-	// 	buffer.SetEnv("RESTIC_PASSWORD_FILE", resticCredential.PasswordFile)
+// 			tagSubstring += quote + " "
+// 		}
 
-	// } else {
-	// 	return errors.New("no restic password found")
-	// }
+// 		url := ""
+// 		if resticCredential.S3 != nil {
+// 			url = "s3:" + resticCredential.S3.URL
+// 		} else if resticCredential.RESTEndpoint != "" {
+// 			url = "rest:" + resticCredential.RESTEndpoint
+// 		} else {
+// 			return errors.New("unable to locate connection credentials")
+// 		}
 
-	{
-		tagSubstring := ""
-		if config.Metadata != nil {
-			if len(config.Metadata.Name) == 0 {
-				return errors.New("metadata exists, but name is nil")
-			}
+// 		cacertSubstring := ""
+// 		if resticCredential.CACert != "" {
+// 			expandedPath, err := util.Expand(resticCredential.CACert, config.Substitutions)
+// 			if err != nil {
+// 				return err
+// 			}
+// 			cacertSubstring = "--cacert \"" + expandedPath + "\" "
+// 		}
 
-			quote := "'"
-			if buffer.IsWindows {
-				quote = "\""
-			}
+// 		excludesSubstring := ""
+// 		if len(config.GlobalExcludes) > 0 {
+// 			excludesSubstring = buffer.Env("EXCLUDES") + " "
+// 		}
 
-			tagSubstring = fmt.Sprintf("--tag %s%s", quote, config.Metadata.Name)
-			if config.Metadata.AppendDateTime {
-				tagSubstring += buffer.Env("BACKUP_DATE_TIME")
-			}
+// 		cliInvocation := fmt.Sprintf("restic -r %s --verbose %s%s%s backup %s",
+// 			url,
+// 			tagSubstring,
+// 			cacertSubstring,
+// 			excludesSubstring,
+// 			buffer.Env("TODO"))
 
-			tagSubstring += quote + " "
-		}
+// 		buffer.Out()
 
-		url := ""
-		if resticCredential.S3 != nil {
-			url = "s3:" + resticCredential.S3.URL
-		} else if resticCredential.RESTEndpoint != "" {
-			url = "rest:" + resticCredential.RESTEndpoint
-		} else {
-			return errors.New("unable to locate connection credentials")
-		}
+// 		if buffer.IsWindows {
+// 			buffer.Out(cliInvocation)
+// 		} else {
+// 			buffer.Out("bash -c \"" + cliInvocation + "\"")
+// 		}
+// 	}
 
-		cacertSubstring := ""
-		if resticCredential.CACert != "" {
-			expandedPath, err := util.Expand(resticCredential.CACert, config.Substitutions)
-			if err != nil {
-				return err
-			}
-			cacertSubstring = "--cacert \"" + expandedPath + "\" "
-		}
-
-		excludesSubstring := ""
-		if len(config.GlobalExcludes) > 0 {
-			excludesSubstring = buffer.Env("EXCLUDES") + " "
-		}
-
-		cliInvocation := fmt.Sprintf("restic -r %s --verbose %s%s%s backup %s",
-			url,
-			tagSubstring,
-			cacertSubstring,
-			excludesSubstring,
-			buffer.Env("TODO"))
-
-		buffer.Out()
-
-		if buffer.IsWindows {
-			buffer.Out(cliInvocation)
-		} else {
-			buffer.Out("bash -c \"" + cliInvocation + "\"")
-		}
-	}
-
-	return nil
-}
+// 	return nil
+// }
 
 // robocopyGenerateTargetPaths returns a slice of:
 // - source folder path

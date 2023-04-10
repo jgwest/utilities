@@ -82,6 +82,10 @@ func (tn *TextNodes) ExportTo(buffer *OutputBuffer) error {
 	return nil
 }
 
+func (textnode *TextNode) IsWindows() bool {
+	return textnode.parent.isWindows
+}
+
 func (textnode *TextNode) Out(str ...string) {
 	if len(str) == 0 {
 		str = []string{""}
