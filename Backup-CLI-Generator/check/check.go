@@ -7,7 +7,6 @@ import (
 
 	"github.com/jgwest/backup-cli/generate"
 	"github.com/jgwest/backup-cli/model"
-	"github.com/jgwest/backup-cli/util"
 	"gopkg.in/yaml.v2"
 
 	"github.com/sergi/go-diff/diffmatchpatch"
@@ -16,7 +15,7 @@ import (
 func RunCheck(configFilePath string, shellScriptPath string) error {
 
 	// Process the configuration file
-	var out *util.OutputBuffer
+	var out string
 	{
 		content, err := ioutil.ReadFile(configFilePath)
 		if err != nil {
@@ -44,7 +43,7 @@ func RunCheck(configFilePath string, shellScriptPath string) error {
 
 	// Diff the desired output with the existing shell script and report differences
 	dmp := diffmatchpatch.New()
-	diffs := dmp.DiffMain(string(content), out.ToString(), false)
+	diffs := dmp.DiffMain(string(content), out, false)
 
 	// If the diffs contain at least one non-equal diff
 	containsNonEqual := false
