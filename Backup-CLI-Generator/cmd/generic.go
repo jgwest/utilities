@@ -19,6 +19,11 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 
+		if len(args) != 2 {
+			fmt.Println("args: (path to config file) (output path)")
+			return
+		}
+
 		pathToConfigFile := args[0]
 		outputPath := args[1]
 

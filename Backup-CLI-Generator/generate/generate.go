@@ -208,6 +208,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 		// https://stackoverflow.com/questions/4774054/reliable-way-for-a-bash-script-to-get-the-full-path-to-itself
 		prefixNode.Out("SCRIPTPATH=`realpath -s $0`")
 	}
+	prefixNode.AddExports("SCRIPTPATH")
 
 	if config.Metadata != nil {
 
@@ -224,6 +225,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 				backupDateTime.Out("BACKUP_DATE_TIME=`date +%F_%H:%M:%S`")
 			}
 		}
+		backupDateTime.AddExports("BACKUP_DATE_TIME")
 	}
 
 	excludesNode := nodes.NewTextNode()
@@ -251,7 +253,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 			}
 
 			if configType == model.Kopia {
-				// TODO: This needs to be something different on Windows, probably without the slash
+				// TODO: Kopia: This needs to be something different on Windows, probably without the slash
 				excludesNode.SetEnv("EXCLUDES", substring+"--add-ignore \\\""+expandedValue+"\\\"")
 
 				return "", fmt.Errorf("this needs to be something different on Windows, probably without the slash")
@@ -473,7 +475,13 @@ func robocopyGenerateInvocation2(config model.ConfigFile, robocopyFolders [][]st
 
 	textNode := textNodes.NewTextNode()
 
-	textNode.SetEnv("SWITCHES", robocopyCredentials.Switches)
+	envSwitch := ""
+
+	if config.RobocopySettings != nil && (len(config.RobocopySettings.ExcludeFiles) > 0 || len(config.RobocopySettings.ExcludeFolders) > 0) {
+		envSwitch += " " + textNode.Env("EXCLUDES")
+	}
+
+	textNode.SetEnv("SWITCHES", robocopyCredentials.Switches+envSwitch)
 
 	for _, folderTuple := range robocopyFolders {
 		srcFolder := util.FixWindowsPathSuffix("\"" + folderTuple[0] + "\"")

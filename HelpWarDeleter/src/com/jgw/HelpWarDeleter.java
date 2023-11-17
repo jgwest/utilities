@@ -74,9 +74,9 @@ public class HelpWarDeleter {
 			return;
 		}
 
-		for (File match : matchingFiles) {
-			match.delete();
-		}
+//		for (File match : matchingFiles) {
+//			match.delete();
+//		}
 
 	}
 

@@ -39,9 +39,9 @@ func RunGeneric(path string, outputPath string) error {
 		return fmt.Errorf("output path already exists: %s", outputPath)
 	}
 
-	// if err := ioutil.WriteFile(outputPath, []byte(result), 0700); err != nil {
-	// 	return err
-	// }
+	if err := ioutil.WriteFile(outputPath, []byte(result), 0700); err != nil {
+		return err
+	}
 
 	fmt.Println("output: " + result)
 

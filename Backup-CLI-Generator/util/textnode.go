@@ -193,7 +193,7 @@ func (tn TextNodes) ToString() (string, error) {
 func (tn TextNodes) ToStringWithParams(allowUnresolved bool) (string, error) {
 	var res string
 
-	// Variable name -> Child text node id
+	// Variable name -> Child text node id that exports that variable
 	exportedVars := map[string]string{}
 	{
 		for _, childTextNode := range tn.allNodesMap {
@@ -227,15 +227,18 @@ func (tn TextNodes) ToStringWithParams(allowUnresolved bool) (string, error) {
 
 			for requiredVar := range childTextNode.requires {
 
-				parentNode, exists := exportedVars[requiredVar]
+				parentNodeID, exists := exportedVars[requiredVar]
 				if !exists {
 					if !allowUnresolved {
 						return "", fmt.Errorf("child text node requires unexported variable: %v", requiredVar)
 					}
 				} else {
-					childDependencies[parentNode] = parentNode
-				}
 
+					// Ignore self-references
+					if parentNodeID != childTextNode.ID {
+						childDependencies[parentNodeID] = parentNodeID
+					}
+				}
 			}
 
 			var allChildDependencies []string
