@@ -61,7 +61,7 @@ func backupPathContains(backupPaths []string, testStr string) bool {
 }
 
 // checkMonitorFolders verifies that there are no unignored child folders of monitor folders.
-func checkMonitorFolders(configFilePath string, config model.ConfigFile) error {
+func CheckMonitorFolders(configFilePath string, config model.ConfigFile) error {
 
 	if len(config.MonitorFolders) == 0 {
 		return nil
@@ -178,7 +178,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 		return "", fmt.Errorf("dryrun is only supported for tarsnap")
 	}
 
-	if err := checkMonitorFolders(configFilePath, config); err != nil {
+	if err := CheckMonitorFolders(configFilePath, config); err != nil {
 		return "", err
 	}
 
@@ -350,7 +350,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 
 		// processFolder is a slice of: [string (path to backup), model.Folder (folder object)]
 		// - This function also updates kopiaPolicyExcludes, if applicable.
-		processedFolders, err := populateProcessedFolders(configType, config.Folders, config.Substitutions, kopiaPolicyExcludes)
+		processedFolders, err := PopulateProcessedFolders(configType, config.Folders, config.Substitutions, kopiaPolicyExcludes)
 		if err != nil {
 			return "", fmt.Errorf("unable to populateProcessedFolder: %v", err)
 		}
@@ -383,13 +383,13 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 		} else if configType == model.Robocopy {
 
 			// Ensure that none of the folders share a basename
-			if err := robocopyValidateBasenames(processedFolders); err != nil {
+			if err := RobocopyValidateBasenames(processedFolders); err != nil {
 				return "", err
 			}
 
 			if robocopyCredentials, err := config.GetRobocopyCredential(); err == nil {
 
-				robocopyFolders, err = robocopyGenerateTargetPaths(processedFolders, robocopyCredentials)
+				robocopyFolders, err = RobocopyGenerateTargetPaths(processedFolders, robocopyCredentials)
 				if err != nil {
 					return "", err
 				}
@@ -985,14 +985,14 @@ func resticGenerateInvocation2(config model.ConfigFile, textNodes *util.TextNode
 // 	return nil
 // }
 
-// robocopyGenerateTargetPaths returns a slice of:
+// RobocopyGenerateTargetPaths returns a slice of:
 // - source folder path
 // - destination folder (with basename of source folder appended)
 // Example:
 // - [C:\Users] -> [B:\backup\C-Users]
 // - [D:\Users] -> [B:\backup\D-Users]
 // - [C:\To-Backup] -> [B:\backup\To-Backup]
-func robocopyGenerateTargetPaths(processedFolders [][]interface{}, robocopyCredentials model.RobocopyCredentials) ([][]string, error) {
+func RobocopyGenerateTargetPaths(processedFolders [][]interface{}, robocopyCredentials model.RobocopyCredentials) ([][]string, error) {
 	res := [][]string{}
 
 	targetFolder := robocopyCredentials.DestinationFolder
@@ -1029,8 +1029,8 @@ func robocopyGenerateTargetPaths(processedFolders [][]interface{}, robocopyCrede
 
 }
 
-// robocopyValidateBasenames ensures that none of the folders share a basename
-func robocopyValidateBasenames(processedFolders [][]interface{}) error {
+// RobocopyValidateBasenames ensures that none of the folders share a basename
+func RobocopyValidateBasenames(processedFolders [][]interface{}) error {
 
 	basenameMap := map[string]interface{}{}
 	for _, robocopyFolder := range processedFolders {
@@ -1061,9 +1061,9 @@ func robocopyValidateBasenames(processedFolders [][]interface{}) error {
 	return nil
 }
 
-// populateProcessedFolders performs error checking on config file folders, then returns
+// PopulateProcessedFolders performs error checking on config file folders, then returns
 // the a tuple containing (folder path to backup, folder object)
-func populateProcessedFolders(configType model.ConfigType, configFolders []model.Folder, configFileSubstitutions []model.Substitution, kopiaPolicyExcludes map[string][]string) ([][]interface{}, error) {
+func PopulateProcessedFolders(configType model.ConfigType, configFolders []model.Folder, configFileSubstitutions []model.Substitution, kopiaPolicyExcludes map[string][]string) ([][]interface{}, error) {
 
 	var processedFolders [][]interface{}
 	// Array of interfaces, containing:

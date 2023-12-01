@@ -62,7 +62,7 @@ func TestValidateRobocopyBasenames(t *testing.T) {
 	} {
 
 		t.Run(c.name, func(t *testing.T) {
-			err := robocopyValidateBasenames(c.input)
+			err := RobocopyValidateBasenames(c.input)
 
 			pass := (err != nil) == c.expectErr
 			if !pass {

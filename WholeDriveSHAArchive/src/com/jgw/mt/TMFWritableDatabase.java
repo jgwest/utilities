@@ -46,7 +46,7 @@ public class TMFWritableDatabase implements IWritableDatabase {
 
 					try {
 
-						List<Path> paths = Util.listFilesInPath(dir2).stream()
+						List<Path> filesInDir2SortedByHash = Util.listFilesInPath(dir2).stream()
 								.filter(e -> e.getFileName().toString().endsWith(".txt")).sorted((a, b) -> {
 									return extractHash(a.getFileName().toString())
 											.compareTo(extractHash(b.getFileName().toString()));
@@ -55,7 +55,7 @@ public class TMFWritableDatabase implements IWritableDatabase {
 						List<Path> currentGroup = new ArrayList<>();
 						String lastHash = null;
 
-						for (Path currPath : paths) {
+						for (Path currPath : filesInDir2SortedByHash) {
 							String currHash = extractHash(currPath.getFileName().toString());
 
 							if (lastHash == null) {
@@ -151,9 +151,9 @@ public class TMFWritableDatabase implements IWritableDatabase {
 		Path shaZIPPath = Util.generateOutputPath(entries.get(0).sha, rootDir);
 		Files.createDirectories(shaZIPPath.getParent());
 
-		String output = "";
+		String combinedOutputText = "";
 		if (Files.exists(shaZIPPath)) {
-			output = Util.readSingleEntryFromZIPFileAsString(shaZIPPath);
+			combinedOutputText = Util.readSingleEntryFromZIPFileAsString(shaZIPPath);
 		}
 
 		for (CombinationEntry ce : entries) {
@@ -164,10 +164,10 @@ public class TMFWritableDatabase implements IWritableDatabase {
 				throw new RuntimeException("mismatch: " + entries.get(0).sha + " vs " + ce.sha);
 			}
 
-			output += ce.sha + " " + ce.fileSize + " \"" + ce.pathToFile.toString() + "\"\n";
+			combinedOutputText += ce.sha + " " + ce.fileSize + " \"" + ce.pathToFile.toString() + "\"\n";
 		}
 
-		writeToFile(output, shaZIPPath);
+		writeToFile(combinedOutputText, shaZIPPath);
 
 	}
 
