@@ -1,85 +1,12 @@
 package util
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/jgwest/backup-cli/model"
-	"github.com/sergi/go-diff/diffmatchpatch"
-	"gopkg.in/yaml.v2"
 )
-
-func DiffMissingFields(content []byte) (err error) {
-
-	convertToInterfaceAndBack := func(content []byte) (mapString string, err error) {
-
-		// Convert to string => interface
-		mapStringToIntr := map[string]interface{}{}
-		if err = yaml.Unmarshal(content, &mapStringToIntr); err != nil {
-			return
-		}
-
-		// Convert back to string
-		var out []byte
-		if out, err = yaml.Marshal(mapStringToIntr); err != nil {
-			return
-		}
-		mapString = string(out)
-
-		return
-	}
-
-	var mapString string
-	if mapString, err = convertToInterfaceAndBack(content); err != nil {
-		return
-	}
-
-	var structString string
-	{
-		// Convert string -> ConfigFile
-		model := model.ConfigFile{}
-		if err = yaml.Unmarshal(content, &model); err != nil {
-			return
-		}
-
-		// Convert ConfigFile -> string
-		var out []byte
-		if out, err = yaml.Marshal(model); err != nil {
-			return
-		}
-		if structString, err = convertToInterfaceAndBack(out); err != nil {
-			return
-		}
-	}
-
-	// Compare the two
-	{
-		dmp := diffmatchpatch.New()
-
-		diffs := dmp.DiffMain(mapString, structString, false)
-
-		nonequalDiffs := []diffmatchpatch.Diff{}
-
-		for index, currDiff := range diffs {
-			if currDiff.Type != diffmatchpatch.DiffEqual {
-				nonequalDiffs = append(nonequalDiffs, diffs[index])
-			}
-		}
-
-		if len(nonequalDiffs) > 0 {
-
-			fmt.Println()
-			fmt.Println("-------")
-			fmt.Println(dmp.DiffPrettyText(diffs))
-			fmt.Println("-------")
-			return errors.New("diffs reported")
-		}
-	}
-
-	return nil
-}
 
 type OutputBuffer struct {
 	IsWindows bool

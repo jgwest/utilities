@@ -3,7 +3,6 @@ package backup
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -13,28 +12,16 @@ import (
 	"github.com/jgwest/backup-cli/generate"
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
-	"gopkg.in/yaml.v2"
 )
 
 func RunBackup(path string) error {
 
-	content, err := ioutil.ReadFile(path)
+	model, err := model.ReadConfigFile(path)
 	if err != nil {
 		return err
 	}
 
-	// Look for invalid fields in the YAML
-	if err := util.DiffMissingFields(content); err != nil {
-		return err
-	}
-
-	model := model.ConfigFile{}
-	if err = yaml.Unmarshal(content, &model); err != nil {
-		return err
-	}
-
-	err = ProcessConfig(path, model, false)
-	if err != nil {
+	if err := ProcessConfig(path, model, false); err != nil {
 		return err
 	}
 
@@ -421,13 +408,14 @@ func tarsnapGenerateInvocation3(config model.ConfigFile, dryRun bool, input Back
 
 func resticGenerateInvocation3(config model.ConfigFile, input BackupRunObject) error {
 
-	env := map[string]string{}
+	// TODO: Replace this with a call to util/restic-direct-invocation.go
 
 	resticCredential, err := config.GetResticCredential()
 	if err != nil {
 		return err
 	}
 
+	env := map[string]string{}
 	{
 
 		if resticCredential.S3 != nil {
