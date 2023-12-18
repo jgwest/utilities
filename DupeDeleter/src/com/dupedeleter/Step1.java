@@ -12,13 +12,13 @@ import java.util.Map.Entry;
 
 public class Step1 {
 
-	public static Map<Long, List<Path>> runStep(Path stepParam) {
+	public static Map<Long, List<Path>> runStep(List<Path> stepParam) {
 
-		Map<Long, List<Path>> fileMap = new HashMap<>();
+		Map<Long /* file size */, List<Path>> fileMap = new HashMap<>();
 
 		List<Path> queue = new ArrayList<>();
 
-		queue.add(stepParam);
+		queue.addAll(stepParam);
 
 		while (queue.size() > 0) {
 
