@@ -529,40 +529,60 @@ func kopiaGenerateInvocation2(kopiaPolicyExcludes map[string][]string, config mo
 	}
 
 	if kopiaCredentials.S3.AccessKeyID == "" || kopiaCredentials.S3.SecretAccessKey == "" {
-		return nil, fmt.Errorf("missing S3 credential values")
+		return nil, fmt.Errorf("missing S3 credential values: access key/secret access key")
 	}
 
-	if kopiaCredentials.KopiaS3.Bucket == "" || kopiaCredentials.KopiaS3.Region == "" || kopiaCredentials.KopiaS3.Endpoint == "" {
-		return nil, fmt.Errorf("missing S3 credential values")
+	if kopiaCredentials.KopiaS3.Bucket == "" || kopiaCredentials.KopiaS3.Endpoint == "" {
+		return nil, fmt.Errorf("missing S3 credential values: bucket/endpoint")
 	}
 
 	if kopiaCredentials.Password == "" {
 		return nil, fmt.Errorf("missing kopia password")
 	}
 
-	credentialsNode := textNodes.NewTextNode()
+	// credentialsNode := textNodes.NewTextNode()
 	{
 
-		credentialsNode.Out()
-		credentialsNode.Header("Credentials ")
-		credentialsNode.SetEnv("AWS_ACCESS_KEY_ID", kopiaCredentials.S3.AccessKeyID)
-		credentialsNode.SetEnv("AWS_SECRET_ACCESS_KEY", kopiaCredentials.S3.SecretAccessKey)
+		textNode.Out()
+		textNode.Header("Credentials ")
+		textNode.SetEnv("AWS_ACCESS_KEY_ID", kopiaCredentials.S3.AccessKeyID)
+		textNode.SetEnv("AWS_SECRET_ACCESS_KEY", kopiaCredentials.S3.SecretAccessKey)
 
 		if len(kopiaCredentials.Password) > 0 {
-			credentialsNode.SetEnv("KOPIA_PASSWORD", kopiaCredentials.Password)
+			textNode.SetEnv("KOPIA_PASSWORD", kopiaCredentials.Password)
 		}
 	}
+
+	// credentialsNode := textNodes.NewTextNode()
+	// {
+
+	// 	credentialsNode.Out()
+	// 	credentialsNode.Header("Credentials ")
+	// 	credentialsNode.SetEnv("AWS_ACCESS_KEY_ID", kopiaCredentials.S3.AccessKeyID)
+	// 	credentialsNode.SetEnv("AWS_SECRET_ACCESS_KEY", kopiaCredentials.S3.SecretAccessKey)
+
+	// 	if len(kopiaCredentials.Password) > 0 {
+	// 		credentialsNode.SetEnv("KOPIA_PASSWORD", kopiaCredentials.Password)
+	// 	}
+	// }
 
 	textNode.Out()
 	textNode.Header("Connect repository")
 
-	cliInvocation := fmt.Sprintf("kopia repository connect s3 --bucket=\"%s\" --access-key=\"%s\" --secret-access-key=\"%s\" --password=\"%s\" --endpoint=\"%s\" --region=\"%s\"",
+	cliInvocation := fmt.Sprintf("kopia repository connect s3 --bucket=\"%s\" --access-key=\"%s\" --secret-access-key=\"%s\" --password=\"%s\" --endpoint=\"%s\"",
 		kopiaCredentials.KopiaS3.Bucket,
 		textNode.Env("AWS_ACCESS_KEY_ID"),
 		textNode.Env("AWS_SECRET_ACCESS_KEY"),
 		textNode.Env("KOPIA_PASSWORD"),
-		kopiaCredentials.KopiaS3.Endpoint,
-		kopiaCredentials.KopiaS3.Region)
+		kopiaCredentials.KopiaS3.Endpoint)
+
+	// cliInvocation := fmt.Sprintf("kopia repository connect s3 --bucket=\"%s\" --access-key=\"%s\" --secret-access-key=\"%s\" --password=\"%s\" --endpoint=\"%s\" --region=\"%s\"",
+	// 	kopiaCredentials.KopiaS3.Bucket,
+	// 	textNode.Env("AWS_ACCESS_KEY_ID"),
+	// 	textNode.Env("AWS_SECRET_ACCESS_KEY"),
+	// 	textNode.Env("KOPIA_PASSWORD"),
+	// 	kopiaCredentials.KopiaS3.Endpoint,
+	// 	kopiaCredentials.KopiaS3.Region)
 
 	textNode.Out(cliInvocation)
 

@@ -81,7 +81,7 @@ type S3Credentials struct {
 }
 
 type KopiaS3Credentials struct {
-	Region   string `yaml:"region"`
+	Region   string `yaml:"region,omitempty"`
 	Bucket   string `yaml:"bucket"`
 	Endpoint string `yaml:"endpoint"`
 }

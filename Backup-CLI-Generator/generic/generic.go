@@ -3,7 +3,6 @@ package generic
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -30,7 +29,7 @@ func RunGeneric(path string, outputPath string) error {
 		return fmt.Errorf("output path already exists: %s", outputPath)
 	}
 
-	if err := ioutil.WriteFile(outputPath, []byte(result), 0700); err != nil {
+	if err := os.WriteFile(outputPath, []byte(result), 0700); err != nil {
 		return err
 	}
 

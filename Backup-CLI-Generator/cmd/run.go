@@ -2,10 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"io/ioutil"
 	"strings"
 
 	"github.com/jgwest/backup-cli/run"
+	"github.com/jgwest/backup-cli/util"
 	"github.com/spf13/cobra"
 )
 
@@ -29,7 +29,7 @@ to quickly create a Cobra application.`,
 			params = args[1:]
 		} else {
 			var err error
-			configFile, err = findConfigFile()
+			configFile, err = util.FindConfigFile()
 			if err != nil {
 				fmt.Println(err)
 				return
@@ -44,40 +44,6 @@ to quickly create a Cobra application.`,
 		}
 
 	},
-}
-
-func findConfigFile() (string, error) {
-
-	fileinfoList, err := ioutil.ReadDir(".")
-	if err != nil {
-		return "", err
-	}
-
-	matches := []string{}
-
-	for _, info := range fileinfoList {
-
-		if info.IsDir() {
-			continue
-		}
-
-		if !strings.HasSuffix(strings.ToLower(info.Name()), ".yaml") {
-			continue
-		}
-
-		matches = append(matches, info.Name())
-	}
-
-	if len(matches) > 1 {
-		return "", fmt.Errorf("multiple YAML files in folder")
-	}
-
-	if len(matches) == 0 {
-		return "", fmt.Errorf("no YAML files in folder")
-	}
-
-	return matches[0], nil
-
 }
 
 func init() {

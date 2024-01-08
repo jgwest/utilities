@@ -2,7 +2,6 @@ package check
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/jgwest/backup-cli/generate"
@@ -17,7 +16,7 @@ func RunCheck(configFilePath string, shellScriptPath string) error {
 	// Process the configuration file
 	var out string
 	{
-		content, err := ioutil.ReadFile(configFilePath)
+		content, err := os.ReadFile(configFilePath)
 		if err != nil {
 			return err
 		}
@@ -36,7 +35,7 @@ func RunCheck(configFilePath string, shellScriptPath string) error {
 	}
 
 	// Read the existing shell script
-	content, err := ioutil.ReadFile(shellScriptPath)
+	content, err := os.ReadFile(shellScriptPath)
 	if err != nil {
 		return err
 	}

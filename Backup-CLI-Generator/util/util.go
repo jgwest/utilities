@@ -2,6 +2,7 @@ package util
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strings"
 
@@ -121,4 +122,38 @@ func Expand(input string, configFileSubstitutions []model.Substitution) (output 
 	})
 
 	return
+}
+
+func FindConfigFile() (string, error) {
+
+	fileinfoList, err := ioutil.ReadDir(".")
+	if err != nil {
+		return "", err
+	}
+
+	matches := []string{}
+
+	for _, info := range fileinfoList {
+
+		if info.IsDir() {
+			continue
+		}
+
+		if !strings.HasSuffix(strings.ToLower(info.Name()), ".yaml") {
+			continue
+		}
+
+		matches = append(matches, info.Name())
+	}
+
+	if len(matches) > 1 {
+		return "", fmt.Errorf("multiple YAML files in folder")
+	}
+
+	if len(matches) == 0 {
+		return "", fmt.Errorf("no YAML files in folder")
+	}
+
+	return matches[0], nil
+
 }

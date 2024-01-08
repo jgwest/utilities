@@ -262,15 +262,15 @@ func kopiaGenerateInvocation3(kopiaPolicyExcludes map[string][]string, config mo
 	}
 
 	if kopiaCredentials.S3 == nil || kopiaCredentials.KopiaS3 == nil {
-		return fmt.Errorf("missing S3 credentials")
+		return fmt.Errorf("missing S3 credentials: credential values")
 	}
 
 	if kopiaCredentials.S3.AccessKeyID == "" || kopiaCredentials.S3.SecretAccessKey == "" {
-		return fmt.Errorf("missing S3 credential values")
+		return fmt.Errorf("missing S3 credential values: access key/secret access key")
 	}
 
-	if kopiaCredentials.KopiaS3.Bucket == "" || kopiaCredentials.KopiaS3.Region == "" || kopiaCredentials.KopiaS3.Endpoint == "" {
-		return fmt.Errorf("missing S3 credential values")
+	if kopiaCredentials.KopiaS3.Bucket == "" || kopiaCredentials.KopiaS3.Endpoint == "" {
+		return fmt.Errorf("missing S3 credential values: endpoint/bucket")
 	}
 
 	if kopiaCredentials.Password == "" {

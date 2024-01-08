@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/jgwest/backup-cli/quickcheck"
+	"github.com/jgwest/backup-cli/util"
 	"github.com/spf13/cobra"
 )
 
@@ -13,7 +15,24 @@ var quickCheckCmd = &cobra.Command{
 	Short: "...",
 	Long:  "...",
 	Run: func(cmd *cobra.Command, args []string) {
-		err := quickcheck.RunQuickCheck(args[0])
+
+		var configFile string
+
+		if len(args) == 1 && strings.HasSuffix(args[0], ".yaml") {
+			configFile = args[0]
+		} else if len(args) == 0 {
+			var err error
+			configFile, err = util.FindConfigFile()
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+		} else {
+			fmt.Println("unexpected args")
+			return
+		}
+
+		err := quickcheck.RunQuickCheck(configFile)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -25,9 +44,9 @@ func init() {
 
 	quickCheckCmd.Args = func(cmd *cobra.Command, args []string) error {
 
-		if len(args) != 1 {
-			return fmt.Errorf("one argument required: (config file path)")
-		}
+		// if len(args) != 1 {
+		// 	return fmt.Errorf("one argument required: (config file path)")
+		// }
 
 		return nil
 	}
