@@ -2,9 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
-	"github.com/jgwest/backup-cli/quickcheck"
+	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
 	"github.com/spf13/cobra"
 )
@@ -32,10 +33,26 @@ var quickCheckCmd = &cobra.Command{
 			return
 		}
 
-		err := quickcheck.RunQuickCheck(configFile)
+		model, err := model.ReadConfigFile(configFile)
 		if err != nil {
 			fmt.Println(err)
+			os.Exit(1)
+			return
 		}
+
+		backend, err := findBackendForConfigFile(model)
+		if err != nil {
+			fmt.Printf("unable to locate backend implementation for '%s'\n", configFile)
+			os.Exit(1)
+			return
+		}
+
+		if err := backend.QuickCheck(configFile); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+			return
+		}
+
 	},
 }
 

@@ -57,7 +57,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 			log.Fatal(err)
 		}
 
-		res.backupDateTime = out.String()
+		res.BackupDateTime = out.String()
 
 	} else {
 		// 	backupDateTime.Out("BACKUP_DATE_TIME=`date +%F_%H:%M:%S`")
@@ -78,7 +78,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 				return err
 			}
 
-			res.globalExcludes = append(res.globalExcludes, expandedValue)
+			res.GlobalExcludes = append(res.GlobalExcludes, expandedValue)
 		}
 
 	}
@@ -97,7 +97,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 				return err
 			}
 
-			res.robocopyFileExcludes = append(res.robocopyFileExcludes, expandedValue)
+			res.RobocopyFileExcludes = append(res.RobocopyFileExcludes, expandedValue)
 
 		}
 
@@ -112,7 +112,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 				return fmt.Errorf("wildcards may not be supported in directories with robocopy: %s", expandedValue)
 			}
 
-			res.robocopyFolderExcludes = append(res.robocopyFolderExcludes, expandedValue)
+			res.RobocopyFolderExcludes = append(res.RobocopyFolderExcludes, expandedValue)
 		}
 
 	}
@@ -152,7 +152,7 @@ func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) 
 				}
 
 				// The unsubstituted path is used here
-				res.todo = append(res.todo, folderPath)
+				res.Todo = append(res.Todo, folderPath)
 
 			}
 		} else if configType == model.Robocopy {
@@ -231,11 +231,11 @@ func robocopyGenerateInvocation3(config model.ConfigFile, robocopyFolders [][]st
 	switches = append(switches, strings.Fields(robocopyCredentials.Switches)...)
 
 	// Add file and folder excludes
-	for _, file := range input.robocopyFileExcludes {
+	for _, file := range input.RobocopyFileExcludes {
 		switches = append(switches, "/XF", file)
 	}
 
-	for _, folder := range input.robocopyFolderExcludes {
+	for _, folder := range input.RobocopyFolderExcludes {
 		switches = append(switches, "/XD", folder)
 	}
 
@@ -291,7 +291,7 @@ func kopiaGenerateInvocation3(kopiaPolicyExcludes map[string][]string, config mo
 	}
 	fmt.Println("exec:", repositoryConnectInvocation)
 
-	if len(input.globalExcludes) > 0 {
+	if len(input.GlobalExcludes) > 0 {
 		excludePolicyInvocation := []string{
 			"kopia",
 			"policy",
@@ -299,7 +299,7 @@ func kopiaGenerateInvocation3(kopiaPolicyExcludes map[string][]string, config mo
 			"--global",
 		}
 
-		for _, globalExcludedFolder := range input.globalExcludes {
+		for _, globalExcludedFolder := range input.GlobalExcludes {
 			excludePolicyInvocation = append(excludePolicyInvocation, "--add-ignore", globalExcludedFolder)
 		}
 
@@ -336,7 +336,7 @@ func kopiaGenerateInvocation3(kopiaPolicyExcludes map[string][]string, config mo
 		description := config.Metadata.Name
 
 		if config.Metadata.AppendDateTime {
-			description += input.backupDateTime
+			description += input.BackupDateTime
 		}
 
 		descriptionSubstring = append(descriptionSubstring, "--description="+description)
@@ -347,7 +347,7 @@ func kopiaGenerateInvocation3(kopiaPolicyExcludes map[string][]string, config mo
 	}
 
 	cliInvocation = append(cliInvocation, descriptionSubstring...)
-	cliInvocation = append(cliInvocation, input.todo...)
+	cliInvocation = append(cliInvocation, input.Todo...)
 
 	fmt.Println("exec:", cliInvocation)
 
@@ -371,7 +371,7 @@ func tarsnapGenerateInvocation3(config model.ConfigFile, dryRun bool, input Back
 
 	backupName := config.Metadata.Name
 	if config.Metadata.AppendDateTime {
-		backupName += input.backupDateTime
+		backupName += input.BackupDateTime
 	}
 
 	dryRunSubstring := []string{}
@@ -380,8 +380,8 @@ func tarsnapGenerateInvocation3(config model.ConfigFile, dryRun bool, input Back
 	}
 
 	excludesSubstring := []string{}
-	if len(input.globalExcludes) > 0 {
-		for _, globalExcludedFolder := range input.globalExcludes {
+	if len(input.GlobalExcludes) > 0 {
+		for _, globalExcludedFolder := range input.GlobalExcludes {
 			excludesSubstring = append(excludesSubstring, "--exclude", globalExcludedFolder)
 		}
 	}
@@ -399,7 +399,7 @@ func tarsnapGenerateInvocation3(config model.ConfigFile, dryRun bool, input Back
 
 	execInvocation = append(execInvocation, "-f", backupName)
 
-	execInvocation = append(execInvocation, input.todo...)
+	execInvocation = append(execInvocation, input.Todo...)
 
 	fmt.Println("exec:", execInvocation)
 
@@ -447,7 +447,7 @@ func resticGenerateInvocation3(config model.ConfigFile, input BackupRunObject) e
 
 		tagName := config.Metadata.Name
 		if config.Metadata.AppendDateTime {
-			tagName += input.backupDateTime
+			tagName += input.BackupDateTime
 		}
 
 		tagSubstring = append(tagSubstring, "--tag", tagName)
@@ -472,9 +472,9 @@ func resticGenerateInvocation3(config model.ConfigFile, input BackupRunObject) e
 	}
 
 	excludesSubstring := []string{}
-	if len(input.globalExcludes) > 0 {
+	if len(input.GlobalExcludes) > 0 {
 
-		for _, globalExcludedFolder := range input.globalExcludes {
+		for _, globalExcludedFolder := range input.GlobalExcludes {
 			excludesSubstring = append(excludesSubstring, "--exclude", globalExcludedFolder)
 		}
 	}
@@ -490,7 +490,7 @@ func resticGenerateInvocation3(config model.ConfigFile, input BackupRunObject) e
 	execInvocation = append(execInvocation, cacertSubstring...)
 	execInvocation = append(execInvocation, excludesSubstring...)
 	execInvocation = append(execInvocation, "backup")
-	execInvocation = append(execInvocation, input.todo...)
+	execInvocation = append(execInvocation, input.Todo...)
 
 	fmt.Println("env:", env)
 	fmt.Println("exec:", execInvocation)
@@ -500,12 +500,12 @@ func resticGenerateInvocation3(config model.ConfigFile, input BackupRunObject) e
 }
 
 type BackupRunObject struct {
-	backupDateTime string
+	BackupDateTime string
 
-	globalExcludes []string
+	GlobalExcludes []string
 
-	robocopyFileExcludes   []string
-	robocopyFolderExcludes []string
+	RobocopyFileExcludes   []string
+	RobocopyFolderExcludes []string
 
-	todo []string
+	Todo []string
 }

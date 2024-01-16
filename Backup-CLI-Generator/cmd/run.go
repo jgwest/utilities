@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
-	"github.com/jgwest/backup-cli/run"
+	"github.com/jgwest/backup-cli/backends"
+	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
 	"github.com/spf13/cobra"
 )
@@ -38,9 +40,31 @@ to quickly create a Cobra application.`,
 			params = args[0:]
 		}
 
-		if err := run.Run(configFile, params); err != nil {
+		model, err := model.ReadConfigFile(configFile)
+		if err != nil {
 			fmt.Println(err)
+			os.Exit(1)
 			return
+		}
+
+		backend, err := findBackendForConfigFile(model)
+		if err != nil {
+			fmt.Printf("unable to locate backend implementation for '%s'\n", configFile)
+			os.Exit(1)
+			return
+		}
+
+		if !backend.SupportsRun() {
+			fmt.Printf("backend '%v' does not support run\n", backend.ConfigType())
+			os.Exit(1)
+			return
+		}
+
+		if err := backend.Run(configFile, params); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+			return
+
 		}
 
 	},
@@ -57,5 +81,26 @@ func init() {
 
 	// 	return nil
 	// }
+
+}
+
+func findBackendForConfigFile(config model.ConfigFile) (model.Backend, error) {
+	availableBackends := backends.AvailableBackends()
+
+	configType, err := config.GetConfigType()
+	if err != nil {
+		return nil, fmt.Errorf("unable to extract config type: %v", err)
+	}
+
+	for i := range availableBackends {
+		backend := availableBackends[i]
+
+		if backend.ConfigType() == configType {
+			return backend, nil
+		}
+
+	}
+
+	return nil, fmt.Errorf("supported backend for '%v' not found", configType)
 
 }

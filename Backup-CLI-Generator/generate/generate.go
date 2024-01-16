@@ -3,7 +3,6 @@ package generate
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,30 +12,43 @@ import (
 	"github.com/jgwest/backup-cli/util"
 )
 
-func RunGenerate(path string, outputPath string) error {
+func RunGenerate(path string, outputPath string, backend model.Backend) error {
 
-	model, err := model.ReadConfigFile(path)
-	if err != nil {
-		return err
+	if !backend.SupportsGenerateGeneric() {
+		return fmt.Errorf("backend '%v' does not support generic generation", backend.ConfigType())
 	}
 
-	result, err := ProcessConfig(path, model, false)
-	if err != nil {
-		return err
-	}
+	return backend.GenerateGeneric(path, outputPath)
 
-	// If the output path already exists, don't overwrite it
-	if _, err := os.Stat(outputPath); err == nil {
-		return fmt.Errorf("output path already exists: %s", outputPath)
-	}
+	// model, err := model.ReadConfigFile(path)
+	// if err != nil {
+	// 	return err
+	// }
 
-	if err := ioutil.WriteFile(outputPath, []byte(result), 0700); err != nil {
-		return err
-	}
+	// backend, err := backends.FindBackendForConfigFile(model)
+	// if err != nil {
+	// 	return fmt.Errorf("unable to locate backend implementation for '%s'", path)
+	// }
 
-	fmt.Println(result)
+	// return backend.
 
-	return nil
+	// result, err := ProcessConfig(path, model, false)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// // If the output path already exists, don't overwrite it
+	// if _, err := os.Stat(outputPath); err == nil {
+	// 	return fmt.Errorf("output path already exists: %s", outputPath)
+	// }
+
+	// if err := os.WriteFile(outputPath, []byte(result), 0700); err != nil {
+	// 	return err
+	// }
+
+	// fmt.Println(result)
+
+	// return nil
 
 }
 
@@ -115,7 +127,7 @@ func findUnbackedUpPaths(monitorPath string, monitorFolder model.MonitorFolder, 
 		return nil, fmt.Errorf("'monitor path' does not exist: '%s' (%s)", monitorPath, monitorFolder.Path)
 	}
 
-	pathInfo, err := ioutil.ReadDir(monitorPath)
+	pathInfo, err := os.ReadDir(monitorPath)
 	if err != nil {
 		return nil, err
 	}
