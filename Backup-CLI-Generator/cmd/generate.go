@@ -32,7 +32,7 @@ to quickly create a Cobra application.`,
 
 		backend, err := findBackendForConfigFile(model)
 		if err != nil {
-			fmt.Printf("unable to locate backend implementation for '%s'\n", pathToConfigFile)
+			fmt.Printf("unable to locate backend implementation for '%s': %v\n", pathToConfigFile, err)
 			os.Exit(1)
 			return
 		}
