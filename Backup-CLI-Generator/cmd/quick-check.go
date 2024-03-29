@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/jgwest/backup-cli/model"
@@ -25,31 +24,28 @@ var quickCheckCmd = &cobra.Command{
 			var err error
 			configFile, err = util.FindConfigFile()
 			if err != nil {
-				fmt.Println(err)
+				reportCLIErrorAndExit(err)
 				return
 			}
 		} else {
-			fmt.Println("unexpected args")
+			reportCLIErrorAndExit(fmt.Errorf("unexpected args"))
 			return
 		}
 
 		model, err := model.ReadConfigFile(configFile)
 		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			reportCLIErrorAndExit(err)
 			return
 		}
 
 		backend, err := findBackendForConfigFile(model)
 		if err != nil {
-			fmt.Printf("unable to locate backend implementation for '%s'\n", configFile)
-			os.Exit(1)
+			reportCLIErrorAndExit(fmt.Errorf("unable to locate backend implementation for '%s'", configFile))
 			return
 		}
 
 		if err := backend.QuickCheck(configFile); err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			reportCLIErrorAndExit(err)
 			return
 		}
 

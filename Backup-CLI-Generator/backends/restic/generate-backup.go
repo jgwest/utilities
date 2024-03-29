@@ -22,7 +22,7 @@ func (r ResticBackend) GenerateBackup(path string, outputPath string) error {
 		return err
 	}
 
-	result, err := ProcessConfigGenerateBackup(path, model, false)
+	result, err := ProcessConfigGenerateBackup(path, model)
 	if err != nil {
 		return err
 	}
@@ -42,7 +42,7 @@ func (r ResticBackend) GenerateBackup(path string, outputPath string) error {
 
 }
 
-func ProcessConfigGenerateBackup(configFilePath string, config model.ConfigFile, dryRun bool) (string, error) {
+func ProcessConfigGenerateBackup(configFilePath string, config model.ConfigFile) (string, error) {
 
 	configType, err := config.GetConfigType()
 	if err != nil {

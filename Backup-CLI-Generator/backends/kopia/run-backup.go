@@ -7,10 +7,10 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/jgwest/backup-cli/backup"
 	"github.com/jgwest/backup-cli/generate"
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
+	runbackup "github.com/jgwest/backup-cli/util/cmds/run-backup"
 )
 
 func (r KopiaBackend) SupportsBackup() bool {
@@ -46,7 +46,7 @@ func processRunBackupConfig(configFilePath string, config model.ConfigFile) erro
 		return err
 	}
 
-	res := backup.BackupRunObject{}
+	res := runbackup.BackupRunObject{}
 
 	isWindows := runtime.GOOS == "windows"
 
@@ -123,7 +123,7 @@ func processRunBackupConfig(configFilePath string, config model.ConfigFile) erro
 
 }
 
-func kopiaGenerateRunBackupInvocation(kopiaPolicyExcludes map[string][]string, config model.ConfigFile, input backup.BackupRunObject) error {
+func kopiaGenerateRunBackupInvocation(kopiaPolicyExcludes map[string][]string, config model.ConfigFile, input runbackup.BackupRunObject) error {
 
 	kopiaCredentials, err := config.GetKopiaCredential()
 	if err != nil {

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/jgwest/backup-cli/model"
 	"github.com/spf13/cobra"
@@ -29,21 +28,18 @@ to quickly create a Cobra application.`,
 
 		model, err := model.ReadConfigFile(pathToConfigFile)
 		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			reportCLIErrorAndExit(err)
 			return
 		}
 
 		backend, err := findBackendForConfigFile(model)
 		if err != nil {
-			fmt.Printf("unable to locate backend implementation for '%s'\n", pathToConfigFile)
-			os.Exit(1)
+			reportCLIErrorAndExit(fmt.Errorf("unable to locate backend implementation for '%s'", pathToConfigFile))
 			return
 		}
 
 		if err := backend.Backup(pathToConfigFile); err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			reportCLIErrorAndExit(err)
 			return
 		}
 

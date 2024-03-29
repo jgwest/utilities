@@ -12,46 +12,6 @@ import (
 	"github.com/jgwest/backup-cli/util"
 )
 
-func RunGenerate(path string, outputPath string, backend model.Backend) error {
-
-	if !backend.SupportsGenerateGeneric() {
-		return fmt.Errorf("backend '%v' does not support generic generation", backend.ConfigType())
-	}
-
-	return backend.GenerateGeneric(path, outputPath)
-
-	// model, err := model.ReadConfigFile(path)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// backend, err := backends.FindBackendForConfigFile(model)
-	// if err != nil {
-	// 	return fmt.Errorf("unable to locate backend implementation for '%s'", path)
-	// }
-
-	// return backend.
-
-	// result, err := ProcessConfig(path, model, false)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// // If the output path already exists, don't overwrite it
-	// if _, err := os.Stat(outputPath); err == nil {
-	// 	return fmt.Errorf("output path already exists: %s", outputPath)
-	// }
-
-	// if err := os.WriteFile(outputPath, []byte(result), 0700); err != nil {
-	// 	return err
-	// }
-
-	// fmt.Println(result)
-
-	// return nil
-
-}
-
 func backupPathContains(backupPaths []string, testStr string) bool {
 	for _, backupPath := range backupPaths {
 		if testStr == backupPath {

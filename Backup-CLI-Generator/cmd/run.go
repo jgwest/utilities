@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/jgwest/backup-cli/backends"
@@ -33,7 +32,7 @@ to quickly create a Cobra application.`,
 			var err error
 			configFile, err = util.FindConfigFile()
 			if err != nil {
-				fmt.Println(err)
+				reportCLIErrorAndExit(err)
 				return
 			}
 
@@ -42,27 +41,23 @@ to quickly create a Cobra application.`,
 
 		model, err := model.ReadConfigFile(configFile)
 		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			reportCLIErrorAndExit(err)
 			return
 		}
 
 		backend, err := findBackendForConfigFile(model)
 		if err != nil {
-			fmt.Printf("unable to locate backend implementation for '%s'\n", configFile)
-			os.Exit(1)
+			reportCLIErrorAndExit(fmt.Errorf("unable to locate backend implementation for '%s'", configFile))
 			return
 		}
 
 		if !backend.SupportsRun() {
-			fmt.Printf("backend '%v' does not support run\n", backend.ConfigType())
-			os.Exit(1)
+			reportCLIErrorAndExit(fmt.Errorf("backend '%v' does not support run", backend.ConfigType()))
 			return
 		}
 
 		if err := backend.Run(configFile, params); err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			reportCLIErrorAndExit(err)
 			return
 
 		}
@@ -72,16 +67,6 @@ to quickly create a Cobra application.`,
 
 func init() {
 	rootCmd.AddCommand(runCmd)
-
-	// generateCmd.Args = func(cmd *cobra.Command, args []string) error {
-
-	// 	if len(args) != 2 {
-	// 		return fmt.Errorf("arguments required: (path to yaml file) (output path)")
-	// 	}
-
-	// 	return nil
-	// }
-
 }
 
 func findBackendForConfigFile(config model.ConfigFile) (model.Backend, error) {

@@ -7,7 +7,6 @@ import (
 	"os/exec"
 
 	"github.com/jgwest/backup-cli/model"
-	"github.com/jgwest/backup-cli/util"
 )
 
 func (r ResticBackend) SupportsRun() bool {
@@ -39,7 +38,7 @@ func processConfigRun(userArgs []string, config model.ConfigFile) error {
 		return fmt.Errorf("unsupported type: %v", configType)
 	}
 
-	invocParams, err := util.GenerateResticDirectInvocation(config)
+	invocParams, err := GenerateResticDirectInvocation(config)
 	if err != nil {
 		return err
 	}

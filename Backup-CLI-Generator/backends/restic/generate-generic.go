@@ -16,12 +16,21 @@ func (r ResticBackend) SupportsGenerateGeneric() bool {
 
 func (r ResticBackend) GenerateGeneric(path string, outputPath string) error {
 
-	model, err := model.ReadConfigFile(path)
+	config, err := model.ReadConfigFile(path)
 	if err != nil {
 		return err
 	}
 
-	result, err := GenerateGenericProcessConfig(path, model, false)
+	configType, err := config.GetConfigType()
+	if err != nil {
+		return err
+	}
+
+	if configType != model.Restic {
+		return fmt.Errorf("configuration file does not support restic")
+	}
+
+	result, err := generateGenericProcessConfig(path, config, false)
 	if err != nil {
 		return err
 	}
@@ -41,12 +50,7 @@ func (r ResticBackend) GenerateGeneric(path string, outputPath string) error {
 
 }
 
-func GenerateGenericProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) (string, error) {
-
-	configType, err := config.GetConfigType()
-	if err != nil {
-		return "", err
-	}
+func generateGenericProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) (string, error) {
 
 	nodes := util.NewTextNodes()
 
@@ -62,17 +66,7 @@ func GenerateGenericProcessConfig(configFilePath string, config model.ConfigFile
 		prefixNode.Out("SCRIPTPATH=`realpath -s $0`")
 	}
 
-	if configType == model.Restic {
-		err = resticGenerateGenericInvocation2(config, nodes)
-	} else if configType == model.Kopia {
-		// 	err = kopiaGenerateGenericInvocation(config, &buffer)
-		// } else if configType == model.Tarsnap {
-		// 	err = tarsnapGenerateGenericInvocation(config, &buffer)
-		// } else {
-		return "", fmt.Errorf("unsupported configType: %v", configType)
-	}
-
-	if err != nil {
+	if err := resticGenerateGenericInvocation2(config, nodes); err != nil {
 		return "", err
 	}
 

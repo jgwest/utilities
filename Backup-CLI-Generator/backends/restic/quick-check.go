@@ -7,7 +7,6 @@ import (
 	"os/exec"
 
 	"github.com/jgwest/backup-cli/model"
-	"github.com/jgwest/backup-cli/util"
 )
 
 func (r ResticBackend) SupportsQuickCheck() bool {
@@ -36,7 +35,7 @@ func (r ResticBackend) QuickCheck(path string) error {
 
 func resticQuickCheck(config model.ConfigFile) error {
 
-	invocParams, err := util.GenerateResticDirectInvocation(config)
+	invocParams, err := GenerateResticDirectInvocation(config)
 	if err != nil {
 		return err
 	}

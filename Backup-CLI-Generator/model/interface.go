@@ -21,4 +21,8 @@ type Backend interface {
 	Run(path string, args []string) error
 
 	Backup(path string) error
+
+	SupportsBackupShellScriptDiffCheck() bool
+
+	BackupShellScriptDiffCheck(configFilePath string, shellScriptPath string) error
 }

@@ -31,7 +31,7 @@ func (r KopiaBackend) GenerateBackup(path string, outputPath string) error {
 		return fmt.Errorf("configuration file does not support kopia")
 	}
 
-	result, err := ProcessConfig(path, config)
+	result, err := processGenerateBackupConfig(path, config)
 	if err != nil {
 		return err
 	}
@@ -51,7 +51,7 @@ func (r KopiaBackend) GenerateBackup(path string, outputPath string) error {
 
 }
 
-func ProcessConfig(configFilePath string, config model.ConfigFile) (string, error) {
+func processGenerateBackupConfig(configFilePath string, config model.ConfigFile) (string, error) {
 
 	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
 		return "", err

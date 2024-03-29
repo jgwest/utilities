@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/jgwest/backup-cli/check"
+	"github.com/jgwest/backup-cli/model"
 	"github.com/spf13/cobra"
 )
 
@@ -13,10 +13,27 @@ var checkCmd = &cobra.Command{
 	Short: "Output a diff between the expected script, and the actual script.",
 	Long:  "Output a diff between the expected script, and the actual script.",
 	Run: func(cmd *cobra.Command, args []string) {
-		err := check.RunCheck(args[0], args[1])
+
+		pathToConfigFile := args[0]
+		scriptPath := args[1]
+
+		model, err := model.ReadConfigFile(pathToConfigFile)
 		if err != nil {
-			fmt.Println(err)
+			reportCLIErrorAndExit(err)
+			return
 		}
+
+		backend, err := findBackendForConfigFile(model)
+		if err != nil {
+			reportCLIErrorAndExit(fmt.Errorf("unable to locate backend implementation for '%s': %v", pathToConfigFile, err))
+			return
+		}
+
+		if err := backend.BackupShellScriptDiffCheck(pathToConfigFile, scriptPath); err != nil {
+			reportCLIErrorAndExit(err)
+			return
+		}
+
 	},
 }
 
