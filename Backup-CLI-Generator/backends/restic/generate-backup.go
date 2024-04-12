@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jgwest/backup-cli/generate"
-	"github.com/jgwest/backup-cli/generic"
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
+	"github.com/jgwest/backup-cli/util/cmds/generate"
 )
 
 func (r ResticBackend) SupportsGenerateBackup() bool {
@@ -17,12 +16,12 @@ func (r ResticBackend) SupportsGenerateBackup() bool {
 
 func (r ResticBackend) GenerateBackup(path string, outputPath string) error {
 
-	model, err := model.ReadConfigFile(path)
+	config, err := extractAndValidateConfigFile(path)
 	if err != nil {
 		return err
 	}
 
-	result, err := ProcessConfigGenerateBackup(path, model)
+	result, err := ProcessConfigGenerateBackup(path, config)
 	if err != nil {
 		return err
 	}
@@ -187,7 +186,7 @@ func resticGenerateBackupInvocation2(config model.ConfigFile, textNodes *util.Te
 	{
 		credentialsNode := textNodes.NewTextNode()
 
-		if err := generic.SharedGenerateResticCredentials(config, credentialsNode); err != nil {
+		if err := SharedGenerateResticCredentials(config, credentialsNode); err != nil {
 			return nil, err
 		}
 	}

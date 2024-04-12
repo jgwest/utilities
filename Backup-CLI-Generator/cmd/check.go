@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/jgwest/backup-cli/model"
 	"github.com/spf13/cobra"
 )
 
@@ -17,15 +16,10 @@ var checkCmd = &cobra.Command{
 		pathToConfigFile := args[0]
 		scriptPath := args[1]
 
-		model, err := model.ReadConfigFile(pathToConfigFile)
-		if err != nil {
-			reportCLIErrorAndExit(err)
-			return
-		}
+		backend := retrieveBackendFromConfigFile(pathToConfigFile)
 
-		backend, err := findBackendForConfigFile(model)
-		if err != nil {
-			reportCLIErrorAndExit(fmt.Errorf("unable to locate backend implementation for '%s': %v", pathToConfigFile, err))
+		if !backend.SupportsBackupShellScriptDiffCheck() {
+			reportCLIErrorAndExit(fmt.Errorf("backend '%v' does not support backup shell diff check", backend.ConfigType()))
 			return
 		}
 

@@ -8,16 +8,35 @@ import (
 	"github.com/jgwest/backup-cli/util"
 )
 
-type DirectInvocation struct {
+func extractAndValidateConfigFile(path string) (model.ConfigFile, error) {
+
+	config, err := model.ReadConfigFile(path)
+	if err != nil {
+		return model.ConfigFile{}, err
+	}
+
+	configType, err := config.GetConfigType()
+	if err != nil {
+		return model.ConfigFile{}, err
+	}
+
+	if configType != model.Restic {
+		return model.ConfigFile{}, fmt.Errorf("configuration file does not support restic")
+	}
+
+	return config, nil
+}
+
+type directInvocation struct {
 	Args                 []string
 	EnvironmentVariables map[string]string
 }
 
-func GenerateResticDirectInvocation(config model.ConfigFile) (DirectInvocation, error) {
+func generateResticDirectInvocation(config model.ConfigFile) (directInvocation, error) {
 
 	resticCredential, err := config.GetResticCredential()
 	if err != nil {
-		return DirectInvocation{}, err
+		return directInvocation{}, err
 	}
 
 	env := map[string]string{}
@@ -29,7 +48,7 @@ func GenerateResticDirectInvocation(config model.ConfigFile) (DirectInvocation, 
 		}
 
 		if len(resticCredential.Password) > 0 && len(resticCredential.PasswordFile) > 0 {
-			return DirectInvocation{}, errors.New("both password and password file are specified")
+			return directInvocation{}, errors.New("both password and password file are specified")
 		}
 
 		if len(resticCredential.Password) > 0 {
@@ -39,7 +58,7 @@ func GenerateResticDirectInvocation(config model.ConfigFile) (DirectInvocation, 
 			env["RESTIC_PASSWORD_FILE"] = resticCredential.PasswordFile
 
 		} else {
-			return DirectInvocation{}, errors.New("no restic password found")
+			return directInvocation{}, errors.New("no restic password found")
 		}
 
 	}
@@ -50,14 +69,14 @@ func GenerateResticDirectInvocation(config model.ConfigFile) (DirectInvocation, 
 	} else if resticCredential.RESTEndpoint != "" {
 		url = "rest:" + resticCredential.RESTEndpoint
 	} else {
-		return DirectInvocation{}, errors.New("unable to locate connection credentials")
+		return directInvocation{}, errors.New("unable to locate connection credentials")
 	}
 
 	cacertSubstring := []string{}
 	if resticCredential.CACert != "" {
 		expandedPath, err := util.Expand(resticCredential.CACert, config.Substitutions)
 		if err != nil {
-			return DirectInvocation{}, err
+			return directInvocation{}, err
 		}
 		cacertSubstring = append(cacertSubstring, "--cacert", expandedPath)
 	}
@@ -71,10 +90,5 @@ func GenerateResticDirectInvocation(config model.ConfigFile) (DirectInvocation, 
 
 	execInvocation = append(execInvocation, cacertSubstring...)
 
-	return DirectInvocation{Args: execInvocation, EnvironmentVariables: env}, nil
-}
-
-func (di DirectInvocation) Out() {
-	fmt.Println("Environment Variables:", di.EnvironmentVariables)
-	fmt.Println("Args:", di.Args)
+	return directInvocation{Args: execInvocation, EnvironmentVariables: env}, nil
 }

@@ -77,15 +77,6 @@ func (buffer *OutputBuffer) Header(str string) {
 
 }
 
-// func (buffer *OutputBuffer) comment(str string) {
-// 	if buffer.isWindows {
-// 		buffer.Out("REM " + str)
-// 	} else {
-// 		buffer.Out("# " + str)
-// 	}
-
-// }
-
 func (buffer *OutputBuffer) Out(str ...string) {
 	if len(str) == 0 {
 		str = []string{""}

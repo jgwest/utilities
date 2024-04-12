@@ -7,29 +7,21 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/jgwest/backup-cli/generate"
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
+	"github.com/jgwest/backup-cli/util/cmds/generate"
 	runbackup "github.com/jgwest/backup-cli/util/cmds/run-backup"
 )
 
 func (r KopiaBackend) SupportsBackup() bool {
-	return false
+	return true
 }
 
 func (r KopiaBackend) Backup(path string) error {
-	config, err := model.ReadConfigFile(path)
+
+	config, err := extractAndValidateConfigFile(path)
 	if err != nil {
 		return err
-	}
-
-	configType, err := config.GetConfigType()
-	if err != nil {
-		return err
-	}
-
-	if configType != model.Kopia {
-		return fmt.Errorf("configuration file does not support kopia")
 	}
 
 	if err := processRunBackupConfig(path, config); err != nil {

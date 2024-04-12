@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/jgwest/backup-cli/model"
 	"github.com/spf13/cobra"
 )
 
@@ -26,15 +25,10 @@ to quickly create a Cobra application.`,
 
 		pathToConfigFile := args[0]
 
-		model, err := model.ReadConfigFile(pathToConfigFile)
-		if err != nil {
-			reportCLIErrorAndExit(err)
-			return
-		}
+		backend := retrieveBackendFromConfigFile(pathToConfigFile)
 
-		backend, err := findBackendForConfigFile(model)
-		if err != nil {
-			reportCLIErrorAndExit(fmt.Errorf("unable to locate backend implementation for '%s'", pathToConfigFile))
+		if !backend.SupportsBackup() {
+			reportCLIErrorAndExit(fmt.Errorf("backend '%v' does not support backup", backend.ConfigType()))
 			return
 		}
 

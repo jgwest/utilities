@@ -9,9 +9,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/jgwest/backup-cli/generate"
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
+	"github.com/jgwest/backup-cli/util/cmds/generate"
 	runbackup "github.com/jgwest/backup-cli/util/cmds/run-backup"
 )
 
@@ -20,18 +20,10 @@ func (r RobocopyBackend) SupportsBackup() bool {
 }
 
 func (r RobocopyBackend) Backup(path string) error {
-	config, err := model.ReadConfigFile(path)
+
+	config, err := extractAndValidateConfigFile(path)
 	if err != nil {
 		return err
-	}
-
-	configType, err := config.GetConfigType()
-	if err != nil {
-		return err
-	}
-
-	if configType != model.Robocopy {
-		return fmt.Errorf("this configuration file does not support robocopy")
 	}
 
 	// TODO: Re-enable tarsnap support for dry-run
@@ -130,13 +122,13 @@ func ProcessRunBackupConfig(configFilePath string, config model.ConfigFile, dryR
 		}
 
 		// Ensure that none of the folders share a basename
-		if err := generate.RobocopyValidateBasenames(processedFolders); err != nil {
+		if err := RobocopyValidateBasenames(processedFolders); err != nil {
 			return err
 		}
 
 		if robocopyCredentials, err := config.GetRobocopyCredential(); err == nil {
 
-			robocopyFolders, err = generate.RobocopyGenerateTargetPaths(processedFolders, robocopyCredentials)
+			robocopyFolders, err = RobocopyGenerateTargetPaths(processedFolders, robocopyCredentials)
 			if err != nil {
 				return err
 			}

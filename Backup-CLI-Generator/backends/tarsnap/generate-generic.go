@@ -15,16 +15,9 @@ func (r TarsnapBackend) SupportsGenerateGeneric() bool {
 
 func (r TarsnapBackend) GenerateGeneric(path string, outputPath string) error {
 
-	config, err := model.ReadConfigFile(path)
+	config, err := extractAndValidateConfigFile(path)
 	if err != nil {
 		return err
-	}
-
-	if configType, err := config.GetConfigType(); err != nil {
-		return err
-	} else if configType != model.Tarsnap {
-
-		return fmt.Errorf("configuration file does not support tarnsap")
 	}
 
 	resultBuffer, err := ProcessConfig(path, config, false)

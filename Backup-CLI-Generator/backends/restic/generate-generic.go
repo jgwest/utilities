@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jgwest/backup-cli/generic"
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
 )
@@ -16,18 +15,9 @@ func (r ResticBackend) SupportsGenerateGeneric() bool {
 
 func (r ResticBackend) GenerateGeneric(path string, outputPath string) error {
 
-	config, err := model.ReadConfigFile(path)
+	config, err := extractAndValidateConfigFile(path)
 	if err != nil {
 		return err
-	}
-
-	configType, err := config.GetConfigType()
-	if err != nil {
-		return err
-	}
-
-	if configType != model.Restic {
-		return fmt.Errorf("configuration file does not support restic")
 	}
 
 	result, err := generateGenericProcessConfig(path, config, false)
@@ -84,7 +74,7 @@ func resticGenerateGenericInvocation2(config model.ConfigFile, textNodes *util.T
 	// Build credentials nodes
 	credentials := textNodes.NewTextNode()
 	{
-		if err := generic.SharedGenerateResticCredentials(config, credentials); err != nil {
+		if err := SharedGenerateResticCredentials(config, credentials); err != nil {
 			return err
 		}
 	}
@@ -135,4 +125,36 @@ func resticGenerateGenericInvocation2(config model.ConfigFile, textNodes *util.T
 	}
 
 	return nil
+}
+
+func SharedGenerateResticCredentials(config model.ConfigFile, node *util.TextNode) error {
+
+	resticCredential, err := config.GetResticCredential()
+	if err != nil {
+		return err
+	}
+	node.Out()
+	node.Header("Credentials ")
+
+	if resticCredential.S3 != nil {
+		node.SetEnv("AWS_ACCESS_KEY_ID", resticCredential.S3.AccessKeyID)
+		node.SetEnv("AWS_SECRET_ACCESS_KEY", resticCredential.S3.SecretAccessKey)
+	}
+
+	if len(resticCredential.Password) > 0 && len(resticCredential.PasswordFile) > 0 {
+		return errors.New("both password and password file are specified")
+	}
+
+	if len(resticCredential.Password) > 0 {
+		node.SetEnv("RESTIC_PASSWORD", resticCredential.Password)
+
+	} else if len(resticCredential.PasswordFile) > 0 {
+		node.SetEnv("RESTIC_PASSWORD_FILE", resticCredential.PasswordFile)
+
+	} else {
+		return errors.New("no restic password found")
+	}
+
+	return nil
+
 }

@@ -4,11 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
-	"github.com/jgwest/backup-cli/generate"
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
+	"github.com/jgwest/backup-cli/util/cmds/generate"
 )
 
 func (r RobocopyBackend) SupportsGenerateBackup() bool {
@@ -17,18 +18,9 @@ func (r RobocopyBackend) SupportsGenerateBackup() bool {
 
 func (r RobocopyBackend) GenerateBackup(path string, outputPath string) error {
 
-	config, err := model.ReadConfigFile(path)
+	config, err := extractAndValidateConfigFile(path)
 	if err != nil {
 		return err
-	}
-
-	configType, err := config.GetConfigType()
-	if err != nil {
-		return err
-	}
-
-	if configType != model.Robocopy {
-		return fmt.Errorf("configuration file does not support robocopy")
 	}
 
 	result, err := processGenerateBackupConfig(path, config)
@@ -182,13 +174,13 @@ func processGenerateBackupConfig(configFilePath string, config model.ConfigFile)
 		}
 
 		// Ensure that none of the folders share a basename
-		if err := generate.RobocopyValidateBasenames(processedFolders); err != nil {
+		if err := RobocopyValidateBasenames(processedFolders); err != nil {
 			return "", err
 		}
 
 		if robocopyCredentials, err := config.GetRobocopyCredential(); err == nil {
 
-			robocopyFolders, err = generate.RobocopyGenerateTargetPaths(processedFolders, robocopyCredentials)
+			robocopyFolders, err = RobocopyGenerateTargetPaths(processedFolders, robocopyCredentials)
 			if err != nil {
 				return "", err
 			}
@@ -253,4 +245,80 @@ func robocopyGenerateInvocation2(config model.ConfigFile, robocopyFolders [][]st
 	}
 
 	return textNode, nil
+}
+
+// RobocopyGenerateTargetPaths returns a slice of:
+// - source folder path
+// - destination folder (with basename of source folder appended)
+// Example:
+// - [C:\Users] -> [B:\backup\C-Users]
+// - [D:\Users] -> [B:\backup\D-Users]
+// - [C:\To-Backup] -> [B:\backup\To-Backup]
+func RobocopyGenerateTargetPaths(processedFolders [][]interface{}, robocopyCredentials model.RobocopyCredentials) ([][]string, error) {
+	res := [][]string{}
+
+	targetFolder := robocopyCredentials.DestinationFolder
+
+	for _, robocopyFolder := range processedFolders {
+
+		robocopySrcFolderPath, ok := (robocopyFolder[0]).(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid robocopyFolderPath")
+		}
+
+		folderEntry, ok := (robocopyFolder[1]).(model.Folder)
+		if !ok {
+			return nil, fmt.Errorf("invalid robocopyFolder")
+		}
+
+		// Use the name of the src folder as the dest folder name, unless
+		// a replacement is specified in the folder entry.
+		destFolderName := filepath.Base(robocopySrcFolderPath)
+		if folderEntry.Robocopy != nil && folderEntry.Robocopy.DestFolderName != "" {
+			destFolderName = folderEntry.Robocopy.DestFolderName
+		}
+
+		// tuple:
+		// - source folder path
+		// - destination folder with basename of source folder appended
+		tuple := []string{robocopySrcFolderPath, filepath.Join(targetFolder, destFolderName)}
+
+		res = append(res, tuple)
+
+	}
+
+	return res, nil
+
+}
+
+// RobocopyValidateBasenames ensures that none of the folders share a basename
+func RobocopyValidateBasenames(processedFolders [][]interface{}) error {
+
+	basenameMap := map[string]interface{}{}
+	for _, robocopyFolder := range processedFolders {
+
+		robocopyFolderPath, ok := (robocopyFolder[0]).(string)
+		if !ok {
+			return fmt.Errorf("invalid robocopyFolderPath")
+		}
+
+		folderEntry, ok := (robocopyFolder[1]).(model.Folder)
+		if !ok {
+			return fmt.Errorf("invalid robocopyFolder")
+		}
+
+		// Use the name of the src folder as the dest folder name, unless
+		// a replacement is specified in the folder entry.
+		destFolderName := filepath.Base(robocopyFolderPath)
+		if folderEntry.Robocopy != nil && folderEntry.Robocopy.DestFolderName != "" {
+			destFolderName = folderEntry.Robocopy.DestFolderName
+		}
+
+		if _, contains := basenameMap[destFolderName]; contains {
+			return fmt.Errorf("multiple folders share the same base name: %s", destFolderName)
+		}
+
+		basenameMap[destFolderName] = destFolderName
+	}
+	return nil
 }

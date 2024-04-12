@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jgwest/backup-cli/generate"
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
+	"github.com/jgwest/backup-cli/util/cmds/generate"
 )
 
 func (r TarsnapBackend) SupportsGenerateBackup() bool {
@@ -16,18 +16,9 @@ func (r TarsnapBackend) SupportsGenerateBackup() bool {
 
 func (r TarsnapBackend) GenerateBackup(path string, outputPath string) error {
 
-	config, err := model.ReadConfigFile(path)
+	config, err := extractAndValidateConfigFile(path)
 	if err != nil {
 		return err
-	}
-
-	configType, err := config.GetConfigType()
-	if err != nil {
-		return err
-	}
-
-	if configType != model.Tarsnap {
-		return fmt.Errorf("configuration file does not support tarsnap backend")
 	}
 
 	// TODO: Re-enable dryrun on tarsnap

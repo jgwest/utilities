@@ -39,17 +39,7 @@ to quickly create a Cobra application.`,
 			params = args[0:]
 		}
 
-		model, err := model.ReadConfigFile(configFile)
-		if err != nil {
-			reportCLIErrorAndExit(err)
-			return
-		}
-
-		backend, err := findBackendForConfigFile(model)
-		if err != nil {
-			reportCLIErrorAndExit(fmt.Errorf("unable to locate backend implementation for '%s'", configFile))
-			return
-		}
+		backend := retrieveBackendFromConfigFile(configFile)
 
 		if !backend.SupportsRun() {
 			reportCLIErrorAndExit(fmt.Errorf("backend '%v' does not support run", backend.ConfigType()))

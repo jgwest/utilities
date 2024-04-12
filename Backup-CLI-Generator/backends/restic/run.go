@@ -1,7 +1,6 @@
 package restic
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -14,12 +13,13 @@ func (r ResticBackend) SupportsRun() bool {
 }
 
 func (r ResticBackend) Run(path string, args []string) error {
-	model, err := model.ReadConfigFile(path)
+
+	config, err := extractAndValidateConfigFile(path)
 	if err != nil {
 		return err
 	}
 
-	if err := processConfigRun(args, model); err != nil {
+	if err := processConfigRun(args, config); err != nil {
 		return err
 	}
 
@@ -29,16 +29,7 @@ func (r ResticBackend) Run(path string, args []string) error {
 
 func processConfigRun(userArgs []string, config model.ConfigFile) error {
 
-	configType, err := config.GetConfigType()
-	if err != nil {
-		return err
-	}
-
-	if configType != model.Restic {
-		return fmt.Errorf("unsupported type: %v", configType)
-	}
-
-	invocParams, err := GenerateResticDirectInvocation(config)
+	invocParams, err := generateResticDirectInvocation(config)
 	if err != nil {
 		return err
 	}

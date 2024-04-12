@@ -8,23 +8,24 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/jgwest/backup-cli/generate"
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
+	"github.com/jgwest/backup-cli/util/cmds/generate"
 	runbackup "github.com/jgwest/backup-cli/util/cmds/run-backup"
 )
 
 func (r ResticBackend) SupportsBackup() bool {
-	return false
+	return true
 }
 
 func (r ResticBackend) Backup(path string) error {
-	model, err := model.ReadConfigFile(path)
+
+	config, err := extractAndValidateConfigFile(path)
 	if err != nil {
 		return err
 	}
 
-	if err := processConfigRunBackup(path, model); err != nil {
+	if err := processConfigRunBackup(path, config); err != nil {
 		return err
 	}
 

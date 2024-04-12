@@ -1,7 +1,6 @@
 package restic
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -15,18 +14,9 @@ func (r ResticBackend) SupportsQuickCheck() bool {
 
 func (r ResticBackend) QuickCheck(path string) error {
 
-	config, err := model.ReadConfigFile(path)
+	config, err := extractAndValidateConfigFile(path)
 	if err != nil {
 		return err
-	}
-
-	configType, err := config.GetConfigType()
-	if err != nil {
-		return err
-	}
-
-	if configType != model.Restic {
-		return fmt.Errorf("configuration file does not support restic")
 	}
 
 	return resticQuickCheck(config)
@@ -35,7 +25,7 @@ func (r ResticBackend) QuickCheck(path string) error {
 
 func resticQuickCheck(config model.ConfigFile) error {
 
-	invocParams, err := GenerateResticDirectInvocation(config)
+	invocParams, err := generateResticDirectInvocation(config)
 	if err != nil {
 		return err
 	}

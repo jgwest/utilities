@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/jgwest/backup-cli/model"
 	"github.com/spf13/cobra"
 
 	homedir "github.com/mitchellh/go-homedir"
@@ -75,4 +76,20 @@ func initConfig() {
 func reportCLIErrorAndExit(err error) {
 	fmt.Println(err)
 	os.Exit(1)
+}
+
+func retrieveBackendFromConfigFile(pathToConfigFile string) model.Backend {
+	model, err := model.ReadConfigFile(pathToConfigFile)
+	if err != nil {
+		reportCLIErrorAndExit(err)
+		return nil
+	}
+
+	backend, err := findBackendForConfigFile(model)
+	if err != nil {
+		reportCLIErrorAndExit(fmt.Errorf("unable to locate backend implementation for '%s'", pathToConfigFile))
+		return nil
+	}
+
+	return backend
 }

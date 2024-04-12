@@ -15,6 +15,7 @@ func AvailableBackends() []model.Backend {
 		kopia.KopiaBackend{},
 		robocopy.RobocopyBackend{},
 		tarsnap.TarsnapBackend{},
+
 		// add new implementations here:
 		// sample.SampleBackend{},
 	}
