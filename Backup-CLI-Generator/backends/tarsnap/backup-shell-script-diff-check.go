@@ -15,7 +15,7 @@ func (r TarsnapBackend) BackupShellScriptDiffCheck(configFilePath string, shellS
 		return err
 	}
 
-	generatedBackupShellScriptContents, err := processGenerateBackupConfig(configFilePath, config, false)
+	generatedBackupShellScriptContents, err := generateBackupScriptFromConfigFile(configFilePath, config, false)
 	if err != nil {
 		return err
 	}

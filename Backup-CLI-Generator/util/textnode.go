@@ -67,21 +67,6 @@ func (tn *TextNodes) NewTextNode() *TextNode {
 	return res
 }
 
-func (tn *TextNodes) ExportTo(buffer *OutputBuffer) error {
-
-	if res, err := tn.ToStringWithParams(true); err != nil {
-
-		return err
-
-	} else {
-		for _, line := range strings.Split(strings.ReplaceAll(res, "\r\n", "\n"), "\n") {
-			buffer.Out(line)
-		}
-	}
-
-	return nil
-}
-
 func (textnode *TextNode) IsWindows() bool {
 	return textnode.parent.isWindows
 }
@@ -155,13 +140,6 @@ func (textnode *TextNode) Header(str string) {
 		textnode.Out("# " + str)
 	}
 
-}
-
-func (textnode *TextNode) ExportTo(buffer *OutputBuffer) {
-
-	for _, line := range textnode.lines {
-		buffer.Out(line)
-	}
 }
 
 func (textnode *TextNode) ToString() string {

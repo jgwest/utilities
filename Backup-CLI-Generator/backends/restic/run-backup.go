@@ -3,10 +3,6 @@ package restic
 import (
 	"errors"
 	"fmt"
-	"log"
-	"os/exec"
-	"runtime"
-	"strings"
 
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
@@ -25,7 +21,7 @@ func (r ResticBackend) Backup(path string) error {
 		return err
 	}
 
-	if err := processConfigRunBackup(path, config); err != nil {
+	if err := runBackupFromConfigFile(path, config); err != nil {
 		return err
 	}
 
@@ -33,41 +29,15 @@ func (r ResticBackend) Backup(path string) error {
 
 }
 
-func processConfigRunBackup(configFilePath string, config model.ConfigFile) error {
-
-	configType, err := config.GetConfigType()
-	if err != nil {
-		return err
-	}
-
-	if configType != model.Restic {
-		return errors.New("backend only supports restic")
-	}
-
-	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
-		return err
-	}
+func runBackupFromConfigFile(configFilePath string, config model.ConfigFile) error {
 
 	res := runbackup.BackupRunObject{}
 
-	isWindows := runtime.GOOS == "windows"
-
-	if isWindows {
-		cmd := exec.Command("cmd", "/c", "echo %DATE%-%TIME:~1%")
-		var out strings.Builder
-		cmd.Stdout = &out
-
-		if err = cmd.Run(); err != nil {
-			log.Fatal(err)
-		}
-
-		res.BackupDateTime = out.String()
-
-	} else {
-		// 	backupDateTime.Out("BACKUP_DATE_TIME=`date +%F_%H:%M:%S`")
-
-		return fmt.Errorf("linux is unsupported")
+	backupDateTime, err := runbackup.GetCurrentTimeTag()
+	if err != nil {
+		return err
 	}
+	res.BackupDateTime = backupDateTime
 
 	if len(config.GlobalExcludes) > 0 {
 
@@ -83,17 +53,12 @@ func processConfigRunBackup(configFilePath string, config model.ConfigFile) erro
 
 	}
 
-	// Robocopy only: Populate EXCLUDES
-	if config.RobocopySettings != nil {
-		return fmt.Errorf("robocopy settings should not be present")
-	}
-
 	// Process folders
-	// - Populate TODO env var
+	// - Populate TODO list
 	{
 
 		// processFolder is a slice of: [string (path to backup), model.Folder (folder object)]
-		processedFolders, err := generate.PopulateProcessedFolders(configType, config.Folders, config.Substitutions, map[string][]string{})
+		processedFolders, err := generate.PopulateProcessedFolders(model.Restic, config.Folders, config.Substitutions, map[string][]string{})
 		if err != nil {
 			return fmt.Errorf("unable to populateProcessedFolder: %v", err)
 		}
@@ -111,41 +76,23 @@ func processConfigRunBackup(configFilePath string, config model.ConfigFile) erro
 		}
 	}
 
-	return resticGenerateRunBackupInvocation(config, res)
-
-}
-
-func resticGenerateRunBackupInvocation(config model.ConfigFile, input runbackup.BackupRunObject) error {
-
-	// TODO: Replace this with a call to util/restic-direct-invocation.go
-
-	resticCredential, err := config.GetResticCredential()
-	if err != nil {
+	if err := executeBackupInvocation(config, res); err != nil {
 		return err
 	}
 
-	env := map[string]string{}
-	{
+	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
+		return err
+	}
 
-		if resticCredential.S3 != nil {
-			env["AWS_ACCESS_KEY_ID"] = resticCredential.S3.AccessKeyID
-			env["AWS_SECRET_ACCESS_KEY"] = resticCredential.S3.SecretAccessKey
-		}
+	return nil
 
-		if len(resticCredential.Password) > 0 && len(resticCredential.PasswordFile) > 0 {
-			return errors.New("both password and password file are specified")
-		}
+}
 
-		if len(resticCredential.Password) > 0 {
-			env["RESTIC_PASSWORD"] = resticCredential.Password
+func executeBackupInvocation(config model.ConfigFile, input runbackup.BackupRunObject) error {
 
-		} else if len(resticCredential.PasswordFile) > 0 {
-			env["RESTIC_PASSWORD_FILE"] = resticCredential.PasswordFile
-
-		} else {
-			return errors.New("no restic password found")
-		}
-
+	directInvocation, err := generateResticDirectInvocation(config)
+	if err != nil {
+		return err
 	}
 
 	tagSubstring := []string{}
@@ -162,24 +109,6 @@ func resticGenerateRunBackupInvocation(config model.ConfigFile, input runbackup.
 		tagSubstring = append(tagSubstring, "--tag", tagName)
 	}
 
-	url := ""
-	if resticCredential.S3 != nil {
-		url = "s3:" + resticCredential.S3.URL
-	} else if resticCredential.RESTEndpoint != "" {
-		url = "rest:" + resticCredential.RESTEndpoint
-	} else {
-		return errors.New("unable to locate connection credentials")
-	}
-
-	cacertSubstring := []string{}
-	if resticCredential.CACert != "" {
-		expandedPath, err := util.Expand(resticCredential.CACert, config.Substitutions)
-		if err != nil {
-			return err
-		}
-		cacertSubstring = append(cacertSubstring, "--cacert", expandedPath)
-	}
-
 	excludesSubstring := []string{}
 	if len(input.GlobalExcludes) > 0 {
 
@@ -188,22 +117,12 @@ func resticGenerateRunBackupInvocation(config model.ConfigFile, input runbackup.
 		}
 	}
 
-	execInvocation := []string{
-		"restic",
-		"-r",
-		url,
-		"--verbose",
-	}
+	directInvocation.Args = append(directInvocation.Args, excludesSubstring...)
+	directInvocation.Args = append(directInvocation.Args, tagSubstring...)
 
-	execInvocation = append(execInvocation, tagSubstring...)
-	execInvocation = append(execInvocation, cacertSubstring...)
-	execInvocation = append(execInvocation, excludesSubstring...)
-	execInvocation = append(execInvocation, "backup")
-	execInvocation = append(execInvocation, input.Todo...)
+	directInvocation.Args = append(directInvocation.Args, "backup")
+	directInvocation.Args = append(directInvocation.Args, input.Todo...)
 
-	fmt.Println("env:", env)
-	fmt.Println("exec:", execInvocation)
-
-	return nil
+	return directInvocation.Execute()
 
 }

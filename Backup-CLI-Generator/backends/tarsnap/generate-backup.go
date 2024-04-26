@@ -7,6 +7,7 @@ import (
 
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
+	"github.com/jgwest/backup-cli/util/cmds"
 	"github.com/jgwest/backup-cli/util/cmds/generate"
 )
 
@@ -22,7 +23,7 @@ func (r TarsnapBackend) GenerateBackup(path string, outputPath string) error {
 	}
 
 	// TODO: Re-enable dryrun on tarsnap
-	result, err := processGenerateBackupConfig(path, config, false)
+	result, err := generateBackupScriptFromConfigFile(path, config, false)
 	if err != nil {
 		return err
 	}
@@ -41,7 +42,7 @@ func (r TarsnapBackend) GenerateBackup(path string, outputPath string) error {
 	return nil
 }
 
-func processGenerateBackupConfig(configFilePath string, config model.ConfigFile, dryRun bool) (string, error) {
+func generateBackupScriptFromConfigFile(configFilePath string, config model.ConfigFile, dryRun bool) (string, error) {
 
 	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
 		return "", err
@@ -49,17 +50,7 @@ func processGenerateBackupConfig(configFilePath string, config model.ConfigFile,
 
 	nodes := util.NewTextNodes()
 
-	prefixNode := nodes.NewPrefixTextNode()
-	if nodes.IsWindows() {
-		// https://stackoverflow.com/questions/17063947/get-current-batchfile-directory
-		prefixNode.Out("@echo off", "setlocal")
-		prefixNode.Out("set SCRIPTPATH=\"%~f0\"")
-	} else {
-		prefixNode.Out("#!/bin/bash", "", "set -eu")
-		// https://stackoverflow.com/questions/4774054/reliable-way-for-a-bash-script-to-get-the-full-path-to-itself
-		prefixNode.Out("SCRIPTPATH=`realpath -s $0`")
-	}
-	prefixNode.AddExports("SCRIPTPATH")
+	cmds.AddGenericPrefixNode(nodes)
 
 	if config.Metadata != nil {
 
@@ -107,14 +98,8 @@ func processGenerateBackupConfig(configFilePath string, config model.ConfigFile,
 		}
 	}
 
-	// Robocopy only: Populate EXCLUDES
-	if config.RobocopySettings != nil {
-		return "", errors.New("robocopy settings are not supported in tarsnap backend")
-	}
-
 	// Process folders
-	// - Populate TODO env var, for everything except robocopy
-	// - For robocopy, populate robocopyFolders
+	// - Populate TODO env var
 	{
 		foldersNode := nodes.NewTextNode()
 
@@ -159,7 +144,7 @@ func processGenerateBackupConfig(configFilePath string, config model.ConfigFile,
 	} // end 'process folders' section
 
 	// Uses TODO, EXCLUDES, BACKUP_DATE_TIME, from above
-	invocationNode, err := tarsnapGenerateInvocation2(config, dryRun, nodes)
+	invocationNode, err := generateBackupInvocationNode(config, dryRun, nodes)
 	if err != nil {
 		return "", err
 	}
@@ -172,7 +157,7 @@ func processGenerateBackupConfig(configFilePath string, config model.ConfigFile,
 	return nodes.ToString()
 }
 
-func tarsnapGenerateInvocation2(config model.ConfigFile, dryRun bool, textNodes *util.TextNodes) (*util.TextNode, error) {
+func generateBackupInvocationNode(config model.ConfigFile, dryRun bool, textNodes *util.TextNodes) (*util.TextNode, error) {
 
 	textNode := textNodes.NewTextNode()
 

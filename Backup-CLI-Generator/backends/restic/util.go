@@ -15,6 +15,10 @@ func extractAndValidateConfigFile(path string) (model.ConfigFile, error) {
 		return model.ConfigFile{}, err
 	}
 
+	if config.RobocopySettings != nil {
+		return model.ConfigFile{}, fmt.Errorf("restic backend does not support robocopy settings")
+	}
+
 	configType, err := config.GetConfigType()
 	if err != nil {
 		return model.ConfigFile{}, err
@@ -27,16 +31,11 @@ func extractAndValidateConfigFile(path string) (model.ConfigFile, error) {
 	return config, nil
 }
 
-type directInvocation struct {
-	Args                 []string
-	EnvironmentVariables map[string]string
-}
-
-func generateResticDirectInvocation(config model.ConfigFile) (directInvocation, error) {
+func generateResticDirectInvocation(config model.ConfigFile) (util.DirectInvocation, error) {
 
 	resticCredential, err := config.GetResticCredential()
 	if err != nil {
-		return directInvocation{}, err
+		return util.DirectInvocation{}, err
 	}
 
 	env := map[string]string{}
@@ -48,7 +47,7 @@ func generateResticDirectInvocation(config model.ConfigFile) (directInvocation, 
 		}
 
 		if len(resticCredential.Password) > 0 && len(resticCredential.PasswordFile) > 0 {
-			return directInvocation{}, errors.New("both password and password file are specified")
+			return util.DirectInvocation{}, errors.New("both password and password file are specified")
 		}
 
 		if len(resticCredential.Password) > 0 {
@@ -58,7 +57,7 @@ func generateResticDirectInvocation(config model.ConfigFile) (directInvocation, 
 			env["RESTIC_PASSWORD_FILE"] = resticCredential.PasswordFile
 
 		} else {
-			return directInvocation{}, errors.New("no restic password found")
+			return util.DirectInvocation{}, errors.New("no restic password found")
 		}
 
 	}
@@ -69,14 +68,14 @@ func generateResticDirectInvocation(config model.ConfigFile) (directInvocation, 
 	} else if resticCredential.RESTEndpoint != "" {
 		url = "rest:" + resticCredential.RESTEndpoint
 	} else {
-		return directInvocation{}, errors.New("unable to locate connection credentials")
+		return util.DirectInvocation{}, errors.New("unable to locate connection credentials")
 	}
 
 	cacertSubstring := []string{}
 	if resticCredential.CACert != "" {
 		expandedPath, err := util.Expand(resticCredential.CACert, config.Substitutions)
 		if err != nil {
-			return directInvocation{}, err
+			return util.DirectInvocation{}, err
 		}
 		cacertSubstring = append(cacertSubstring, "--cacert", expandedPath)
 	}
@@ -90,5 +89,37 @@ func generateResticDirectInvocation(config model.ConfigFile) (directInvocation, 
 
 	execInvocation = append(execInvocation, cacertSubstring...)
 
-	return directInvocation{Args: execInvocation, EnvironmentVariables: env}, nil
+	return util.DirectInvocation{Args: execInvocation, EnvironmentVariables: env}, nil
+}
+
+func sharedGenerateResticCredentials(config model.ConfigFile, node *util.TextNode) error {
+
+	resticCredential, err := config.GetResticCredential()
+	if err != nil {
+		return err
+	}
+	node.Out()
+	node.Header("Credentials ")
+
+	if resticCredential.S3 != nil {
+		node.SetEnv("AWS_ACCESS_KEY_ID", resticCredential.S3.AccessKeyID)
+		node.SetEnv("AWS_SECRET_ACCESS_KEY", resticCredential.S3.SecretAccessKey)
+	}
+
+	if len(resticCredential.Password) > 0 && len(resticCredential.PasswordFile) > 0 {
+		return errors.New("both password and password file are specified")
+	}
+
+	if len(resticCredential.Password) > 0 {
+		node.SetEnv("RESTIC_PASSWORD", resticCredential.Password)
+
+	} else if len(resticCredential.PasswordFile) > 0 {
+		node.SetEnv("RESTIC_PASSWORD_FILE", resticCredential.PasswordFile)
+
+	} else {
+		return errors.New("no restic password found")
+	}
+
+	return nil
+
 }

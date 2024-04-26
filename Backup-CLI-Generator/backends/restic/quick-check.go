@@ -1,10 +1,6 @@
 package restic
 
 import (
-	"log"
-	"os"
-	"os/exec"
-
 	"github.com/jgwest/backup-cli/model"
 )
 
@@ -19,36 +15,20 @@ func (r ResticBackend) QuickCheck(path string) error {
 		return err
 	}
 
-	return resticQuickCheck(config)
+	return executeQuickCheck(config)
 
 }
 
-func resticQuickCheck(config model.ConfigFile) error {
+func executeQuickCheck(config model.ConfigFile) error {
 
 	invocParams, err := generateResticDirectInvocation(config)
 	if err != nil {
 		return err
 	}
 
-	env := invocParams.EnvironmentVariables
+	invocParams.Args = append(invocParams.Args, []string{
+		"check",
+	}...)
 
-	envList := os.Environ()
-	for k, v := range env {
-		envList = append(envList, k+"="+v)
-	}
-
-	args := invocParams.Args
-
-	args = append(args, "check")
-
-	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Env = envList
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err = cmd.Run(); err != nil {
-		log.Fatal(err)
-	}
-
-	return nil
+	return invocParams.Execute()
 }

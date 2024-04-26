@@ -15,7 +15,7 @@ func (r RobocopyBackend) BackupShellScriptDiffCheck(configFilePath string, shell
 		return err
 	}
 
-	generatedBackupShellScriptContents, err := processGenerateBackupConfig(configFilePath, config)
+	generatedBackupShellScriptContents, err := generateBackupScriptFromConfigFile(configFilePath, config)
 	if err != nil {
 		return err
 	}

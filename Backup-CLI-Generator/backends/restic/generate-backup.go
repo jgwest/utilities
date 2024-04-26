@@ -7,6 +7,7 @@ import (
 
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
+	"github.com/jgwest/backup-cli/util/cmds"
 	"github.com/jgwest/backup-cli/util/cmds/generate"
 )
 
@@ -21,7 +22,7 @@ func (r ResticBackend) GenerateBackup(path string, outputPath string) error {
 		return err
 	}
 
-	result, err := ProcessConfigGenerateBackup(path, config)
+	result, err := generateBackupScriptFromConfigFile(path, config)
 	if err != nil {
 		return err
 	}
@@ -41,15 +42,11 @@ func (r ResticBackend) GenerateBackup(path string, outputPath string) error {
 
 }
 
-func ProcessConfigGenerateBackup(configFilePath string, config model.ConfigFile) (string, error) {
+func generateBackupScriptFromConfigFile(configFilePath string, config model.ConfigFile) (string, error) {
 
 	configType, err := config.GetConfigType()
 	if err != nil {
 		return "", err
-	}
-
-	if configType != model.Restic {
-		return "", fmt.Errorf("unsupported config type: %v", configType)
 	}
 
 	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
@@ -58,17 +55,7 @@ func ProcessConfigGenerateBackup(configFilePath string, config model.ConfigFile)
 
 	nodes := util.NewTextNodes()
 
-	prefixNode := nodes.NewPrefixTextNode()
-	if nodes.IsWindows() {
-		// https://stackoverflow.com/questions/17063947/get-current-batchfile-directory
-		prefixNode.Out("@echo off", "setlocal")
-		prefixNode.Out("set SCRIPTPATH=\"%~f0\"")
-	} else {
-		prefixNode.Out("#!/bin/bash", "", "set -eu")
-		// https://stackoverflow.com/questions/4774054/reliable-way-for-a-bash-script-to-get-the-full-path-to-itself
-		prefixNode.Out("SCRIPTPATH=`realpath -s $0`")
-	}
-	prefixNode.AddExports("SCRIPTPATH")
+	cmds.AddGenericPrefixNode(nodes)
 
 	if config.Metadata != nil {
 
@@ -116,12 +103,8 @@ func ProcessConfigGenerateBackup(configFilePath string, config model.ConfigFile)
 		}
 	}
 
-	if config.RobocopySettings != nil {
-		return "", fmt.Errorf("robocopy setting is defined, but is not supported by this backend")
-	}
-
 	// Process folders
-	// - Populate TODO env var, for everything except robocopy
+	// - Populate TODO env var
 	{
 		foldersNode := nodes.NewTextNode()
 
@@ -167,7 +150,7 @@ func ProcessConfigGenerateBackup(configFilePath string, config model.ConfigFile)
 	var invocationNode *util.TextNode
 
 	// Uses the 'TODO' env var, generated above, to know what to backup.
-	invocationNode, err = resticGenerateBackupInvocation2(config, nodes)
+	invocationNode, err = generateGenerateBackupInvocationNode(config, nodes)
 	if err != nil {
 		return "", err
 	}
@@ -181,14 +164,12 @@ func ProcessConfigGenerateBackup(configFilePath string, config model.ConfigFile)
 	return nodes.ToString()
 }
 
-func resticGenerateBackupInvocation2(config model.ConfigFile, textNodes *util.TextNodes) (*util.TextNode, error) {
+func generateGenerateBackupInvocationNode(config model.ConfigFile, textNodes *util.TextNodes) (*util.TextNode, error) {
 
-	{
-		credentialsNode := textNodes.NewTextNode()
+	credentialsNode := textNodes.NewTextNode()
 
-		if err := SharedGenerateResticCredentials(config, credentialsNode); err != nil {
-			return nil, err
-		}
+	if err := sharedGenerateResticCredentials(config, credentialsNode); err != nil {
+		return nil, err
 	}
 
 	resticCredential, err := config.GetResticCredential()

@@ -2,10 +2,6 @@ package kopia
 
 import (
 	"fmt"
-	"log"
-	"os/exec"
-	"runtime"
-	"strings"
 
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
@@ -24,7 +20,7 @@ func (r KopiaBackend) Backup(path string) error {
 		return err
 	}
 
-	if err := processRunBackupConfig(path, config); err != nil {
+	if err := runBackupFromConfigFile(path, config); err != nil {
 		return err
 	}
 
@@ -32,32 +28,15 @@ func (r KopiaBackend) Backup(path string) error {
 
 }
 
-func processRunBackupConfig(configFilePath string, config model.ConfigFile) error {
-
-	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
-		return err
-	}
+func runBackupFromConfigFile(configFilePath string, config model.ConfigFile) error {
 
 	res := runbackup.BackupRunObject{}
 
-	isWindows := runtime.GOOS == "windows"
-
-	if isWindows {
-		cmd := exec.Command("cmd", "/c", "echo %DATE%-%TIME:~1%")
-		var out strings.Builder
-		cmd.Stdout = &out
-
-		if err := cmd.Run(); err != nil {
-			log.Fatal(err)
-		}
-
-		res.BackupDateTime = out.String()
-
-	} else {
-		// 	backupDateTime.Out("BACKUP_DATE_TIME=`date +%F_%H:%M:%S`")
-
-		return fmt.Errorf("linux is unsupported")
+	backupDateTime, err := runbackup.GetCurrentTimeTag()
+	if err != nil {
+		return err
 	}
+	res.BackupDateTime = backupDateTime
 
 	if len(config.GlobalExcludes) > 0 {
 
@@ -73,20 +52,12 @@ func processRunBackupConfig(configFilePath string, config model.ConfigFile) erro
 
 	}
 
-	// Robocopy only: Populate EXCLUDES
-	if config.RobocopySettings != nil {
-
-		return fmt.Errorf("robocopy settings found in configuration file")
-
-	}
-
 	// key: path to be backed up
 	// value: list of excludes for that path
 	kopiaPolicyExcludes := map[string][]string{}
 
 	// Process folders
-	// - Populate TODO env var, for everything except robocopy
-	// - For robocopy, populate robocopyFolders
+	// - Populate TODO list
 	{
 
 		// processFolder is a slice of: [string (path to backup), model.Folder (folder object)]
@@ -111,47 +82,50 @@ func processRunBackupConfig(configFilePath string, config model.ConfigFile) erro
 	}
 
 	// Uses TODO, BACKUP_DATE_TIME, EXCLUDES, from above
-	return kopiaGenerateRunBackupInvocation(kopiaPolicyExcludes, config, res)
+	if err := executeBackupInvocation(kopiaPolicyExcludes, config, res); err != nil {
+		return err
+	}
 
+	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func kopiaGenerateRunBackupInvocation(kopiaPolicyExcludes map[string][]string, config model.ConfigFile, input runbackup.BackupRunObject) error {
+func executeBackupInvocation(kopiaPolicyExcludes map[string][]string, config model.ConfigFile, input runbackup.BackupRunObject) error {
 
-	kopiaCredentials, err := config.GetKopiaCredential()
+	kopiaCredentials, err := getAndValidateKopiaCredentials(config)
 	if err != nil {
 		return err
 	}
 
-	if kopiaCredentials.S3 == nil || kopiaCredentials.KopiaS3 == nil {
-		return fmt.Errorf("missing S3 credentials: credential values")
+	// Connect the repository
+	{
+		repositoryConnectInvocation := []string{
+			"kopia",
+			"repository",
+			"connect",
+			"s3",
+			"--bucket=" + kopiaCredentials.KopiaS3.Bucket,
+			"--access-key=" + kopiaCredentials.S3.AccessKeyID,
+			"--secret-access-key=" + kopiaCredentials.S3.SecretAccessKey,
+			"--password=" + kopiaCredentials.Password,
+			"--endpoint=" + kopiaCredentials.KopiaS3.Endpoint,
+			"--region=" + kopiaCredentials.KopiaS3.Region,
+		}
+
+		repositoryConnectDI := util.DirectInvocation{
+			Args:                 repositoryConnectInvocation,
+			EnvironmentVariables: map[string]string{},
+		}
+
+		if err := repositoryConnectDI.Execute(); err != nil {
+			return err
+		}
 	}
 
-	if kopiaCredentials.S3.AccessKeyID == "" || kopiaCredentials.S3.SecretAccessKey == "" {
-		return fmt.Errorf("missing S3 credential values: access key/secret access key")
-	}
-
-	if kopiaCredentials.KopiaS3.Bucket == "" || kopiaCredentials.KopiaS3.Endpoint == "" {
-		return fmt.Errorf("missing S3 credential values: endpoint/bucket")
-	}
-
-	if kopiaCredentials.Password == "" {
-		return fmt.Errorf("missing kopia password")
-	}
-
-	repositoryConnectInvocation := []string{
-		"kopia",
-		"repository",
-		"connect",
-		"s3",
-		"--bucket=" + kopiaCredentials.KopiaS3.Bucket,
-		"--access-key=" + kopiaCredentials.S3.AccessKeyID,
-		"--secret-access-key=" + kopiaCredentials.S3.SecretAccessKey,
-		"--password=" + kopiaCredentials.Password,
-		"--endpoint=" + kopiaCredentials.KopiaS3.Endpoint,
-		"--region=" + kopiaCredentials.KopiaS3.Region,
-	}
-	fmt.Println("exec:", repositoryConnectInvocation)
-
+	// Set the global policy
 	if len(input.GlobalExcludes) > 0 {
 		excludePolicyInvocation := []string{
 			"kopia",
@@ -164,10 +138,18 @@ func kopiaGenerateRunBackupInvocation(kopiaPolicyExcludes map[string][]string, c
 			excludePolicyInvocation = append(excludePolicyInvocation, "--add-ignore", globalExcludedFolder)
 		}
 
-		fmt.Println("exec:", excludePolicyInvocation)
+		setPolicyDI := util.DirectInvocation{
+			Args:                 excludePolicyInvocation,
+			EnvironmentVariables: map[string]string{},
+		}
+
+		if err := setPolicyDI.Execute(); err != nil {
+			return err
+		}
+
 	}
 
-	// Build
+	// Run set policy for the local paths
 	if len(kopiaPolicyExcludes) > 0 {
 
 		for backupPath, excludes := range kopiaPolicyExcludes {
@@ -188,9 +170,19 @@ func kopiaGenerateRunBackupInvocation(kopiaPolicyExcludes map[string][]string, c
 
 			cliInvocation = append(cliInvocation, backupPath)
 
-			fmt.Println("exec:", cliInvocation)
+			localPolicyDI := util.DirectInvocation{
+				Args:                 cliInvocation,
+				EnvironmentVariables: map[string]string{},
+			}
+
+			if err := localPolicyDI.Execute(); err != nil {
+				return err
+			}
+
 		}
 	}
+
+	// Finally, create a snapshot
 
 	descriptionSubstring := []string{}
 	if config.Metadata != nil && config.Metadata.Name != "" {
@@ -203,14 +195,17 @@ func kopiaGenerateRunBackupInvocation(kopiaPolicyExcludes map[string][]string, c
 		descriptionSubstring = append(descriptionSubstring, "--description="+description)
 	}
 
-	cliInvocation := []string{
+	createsSnaphotDI := []string{
 		"kopia", "snapshot", "create",
 	}
 
-	cliInvocation = append(cliInvocation, descriptionSubstring...)
-	cliInvocation = append(cliInvocation, input.Todo...)
+	createsSnaphotDI = append(createsSnaphotDI, descriptionSubstring...)
+	createsSnaphotDI = append(createsSnaphotDI, input.Todo...)
 
-	fmt.Println("exec:", cliInvocation)
+	directionInvocation := util.DirectInvocation{
+		Args:                 createsSnaphotDI,
+		EnvironmentVariables: map[string]string{},
+	}
 
-	return nil
+	return directionInvocation.Execute()
 }

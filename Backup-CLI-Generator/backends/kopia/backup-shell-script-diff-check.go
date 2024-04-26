@@ -15,7 +15,7 @@ func (r KopiaBackend) BackupShellScriptDiffCheck(configFilePath string, shellScr
 		return err
 	}
 
-	generatedBackupShellScriptContents, err := processGenerateBackupConfig(configFilePath, config)
+	generatedBackupShellScriptContents, err := generateBackupScriptFromConfigFile(configFilePath, config)
 	if err != nil {
 		return err
 	}

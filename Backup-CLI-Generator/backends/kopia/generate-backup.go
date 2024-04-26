@@ -8,6 +8,7 @@ import (
 
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
+	"github.com/jgwest/backup-cli/util/cmds"
 	"github.com/jgwest/backup-cli/util/cmds/generate"
 )
 
@@ -22,7 +23,7 @@ func (r KopiaBackend) GenerateBackup(path string, outputPath string) error {
 		return err
 	}
 
-	result, err := processGenerateBackupConfig(path, config)
+	result, err := generateBackupScriptFromConfigFile(path, config)
 	if err != nil {
 		return err
 	}
@@ -42,7 +43,7 @@ func (r KopiaBackend) GenerateBackup(path string, outputPath string) error {
 
 }
 
-func processGenerateBackupConfig(configFilePath string, config model.ConfigFile) (string, error) {
+func generateBackupScriptFromConfigFile(configFilePath string, config model.ConfigFile) (string, error) {
 
 	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
 		return "", err
@@ -50,17 +51,7 @@ func processGenerateBackupConfig(configFilePath string, config model.ConfigFile)
 
 	nodes := util.NewTextNodes()
 
-	prefixNode := nodes.NewPrefixTextNode()
-	if nodes.IsWindows() {
-		// https://stackoverflow.com/questions/17063947/get-current-batchfile-directory
-		prefixNode.Out("@echo off", "setlocal")
-		prefixNode.Out("set SCRIPTPATH=\"%~f0\"")
-	} else {
-		prefixNode.Out("#!/bin/bash", "", "set -eu")
-		// https://stackoverflow.com/questions/4774054/reliable-way-for-a-bash-script-to-get-the-full-path-to-itself
-		prefixNode.Out("SCRIPTPATH=`realpath -s $0`")
-	}
-	prefixNode.AddExports("SCRIPTPATH")
+	cmds.AddGenericPrefixNode(nodes)
 
 	if config.Metadata != nil {
 
@@ -108,11 +99,6 @@ func processGenerateBackupConfig(configFilePath string, config model.ConfigFile)
 			}
 
 		}
-	}
-
-	// Robocopy only: Populate EXCLUDES
-	if config.RobocopySettings != nil {
-		return "", fmt.Errorf("robocopy settings found in configuration file")
 	}
 
 	// key: path to be backed up
@@ -166,7 +152,7 @@ func processGenerateBackupConfig(configFilePath string, config model.ConfigFile)
 	} // end 'process folders' section
 
 	// Uses TODO, BACKUP_DATE_TIME, EXCLUDES, from above
-	invocationNode, err := kopiaGenerateBackupInvocation(kopiaPolicyExcludes, config, nodes)
+	invocationNode, err := generateBackupInvocationNode(kopiaPolicyExcludes, config, nodes)
 	if err != nil {
 		return "", err
 	}
@@ -180,10 +166,7 @@ func processGenerateBackupConfig(configFilePath string, config model.ConfigFile)
 	return nodes.ToString()
 }
 
-func kopiaGenerateBackupInvocation(kopiaPolicyExcludes map[string][]string, config model.ConfigFile, textNodes *util.TextNodes) (*util.TextNode, error) {
-
-	textNode := textNodes.NewTextNode()
-
+func getAndValidateKopiaCredentials(config model.ConfigFile) (*model.KopiaCredentials, error) {
 	kopiaCredentials, err := config.GetKopiaCredential()
 	if err != nil {
 		return nil, err
@@ -203,6 +186,18 @@ func kopiaGenerateBackupInvocation(kopiaPolicyExcludes map[string][]string, conf
 
 	if kopiaCredentials.Password == "" {
 		return nil, fmt.Errorf("missing kopia password")
+	}
+
+	return &kopiaCredentials, nil
+}
+
+func generateBackupInvocationNode(kopiaPolicyExcludes map[string][]string, config model.ConfigFile, textNodes *util.TextNodes) (*util.TextNode, error) {
+
+	textNode := textNodes.NewTextNode()
+
+	kopiaCredentials, err := getAndValidateKopiaCredentials(config)
+	if err != nil {
+		return nil, err
 	}
 
 	{

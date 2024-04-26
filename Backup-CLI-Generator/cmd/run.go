@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jgwest/backup-cli/backends"
-	"github.com/jgwest/backup-cli/model"
-	"github.com/jgwest/backup-cli/util"
 	"github.com/spf13/cobra"
 )
 
@@ -30,7 +27,7 @@ to quickly create a Cobra application.`,
 			params = args[1:]
 		} else {
 			var err error
-			configFile, err = util.FindConfigFile()
+			configFile, err = findConfigFile()
 			if err != nil {
 				reportCLIErrorAndExit(err)
 				return
@@ -57,25 +54,4 @@ to quickly create a Cobra application.`,
 
 func init() {
 	rootCmd.AddCommand(runCmd)
-}
-
-func findBackendForConfigFile(config model.ConfigFile) (model.Backend, error) {
-	availableBackends := backends.AvailableBackends()
-
-	configType, err := config.GetConfigType()
-	if err != nil {
-		return nil, fmt.Errorf("unable to extract config type: %v", err)
-	}
-
-	for i := range availableBackends {
-		backend := availableBackends[i]
-
-		if backend.ConfigType() == configType {
-			return backend, nil
-		}
-
-	}
-
-	return nil, fmt.Errorf("supported backend for '%v' not found", configType)
-
 }

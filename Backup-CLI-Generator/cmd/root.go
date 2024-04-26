@@ -3,7 +3,9 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/jgwest/backup-cli/backends"
 	"github.com/jgwest/backup-cli/model"
 	"github.com/spf13/cobra"
 
@@ -92,4 +94,81 @@ func retrieveBackendFromConfigFile(pathToConfigFile string) model.Backend {
 	}
 
 	return backend
+}
+
+func findConfigFile() (string, error) {
+
+	fileinfoList, err := os.ReadDir(".")
+	if err != nil {
+		return "", err
+	}
+
+	matches := []string{}
+
+	for _, info := range fileinfoList {
+
+		if info.IsDir() {
+			continue
+		}
+
+		if !strings.HasSuffix(strings.ToLower(info.Name()), ".yaml") {
+			continue
+		}
+
+		matches = append(matches, info.Name())
+	}
+
+	if len(matches) > 1 {
+		return "", fmt.Errorf("multiple YAML files in folder")
+	}
+
+	if len(matches) == 0 {
+		return "", fmt.Errorf("no YAML files in folder")
+	}
+
+	return matches[0], nil
+
+}
+
+// If the command only takes a single param, which is the path to yaml, then you can call this to retrieve it
+func getOptionalConfigFilePath(args []string) string {
+	var configFile string
+
+	if len(args) == 1 && strings.HasSuffix(args[0], ".yaml") {
+		configFile = args[0]
+	} else if len(args) == 0 {
+		var err error
+		configFile, err = findConfigFile()
+		if err != nil {
+			reportCLIErrorAndExit(err)
+			return ""
+		}
+	} else {
+		reportCLIErrorAndExit(fmt.Errorf("unexpected args"))
+		return ""
+	}
+
+	return configFile
+
+}
+
+func findBackendForConfigFile(config model.ConfigFile) (model.Backend, error) {
+	availableBackends := backends.AvailableBackends()
+
+	configType, err := config.GetConfigType()
+	if err != nil {
+		return nil, fmt.Errorf("unable to extract config type: %v", err)
+	}
+
+	for i := range availableBackends {
+		backend := availableBackends[i]
+
+		if backend.ConfigType() == configType {
+			return backend, nil
+		}
+
+	}
+
+	return nil, fmt.Errorf("supported backend for '%v' not found", configType)
+
 }

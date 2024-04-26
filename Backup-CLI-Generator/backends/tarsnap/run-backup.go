@@ -2,11 +2,7 @@ package tarsnap
 
 import (
 	"fmt"
-	"log"
 	"os"
-	"os/exec"
-	"runtime"
-	"strings"
 
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
@@ -25,7 +21,7 @@ func (r TarsnapBackend) Backup(path string) error {
 		return err
 	}
 
-	if err := ProcessRunBackupConfig(path, config, false); err != nil {
+	if err := runBackupFromConfigFile(path, config, false); err != nil {
 		return err
 	}
 
@@ -33,32 +29,15 @@ func (r TarsnapBackend) Backup(path string) error {
 
 }
 
-func ProcessRunBackupConfig(configFilePath string, config model.ConfigFile, dryRun bool) error {
-
-	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
-		return err
-	}
+func runBackupFromConfigFile(configFilePath string, config model.ConfigFile, dryRun bool) error {
 
 	res := runbackup.BackupRunObject{}
 
-	isWindows := runtime.GOOS == "windows"
-
-	if isWindows {
-		cmd := exec.Command("cmd", "/c", "echo %DATE%-%TIME:~1%")
-		var out strings.Builder
-		cmd.Stdout = &out
-
-		if err := cmd.Run(); err != nil {
-			log.Fatal(err)
-		}
-
-		res.BackupDateTime = out.String()
-
-	} else {
-		// 	backupDateTime.Out("BACKUP_DATE_TIME=`date +%F_%H:%M:%S`")
-
-		return fmt.Errorf("linux is unsupported")
+	backupDateTime, err := runbackup.GetCurrentTimeTag()
+	if err != nil {
+		return err
 	}
+	res.BackupDateTime = backupDateTime
 
 	if len(config.GlobalExcludes) > 0 {
 
@@ -74,12 +53,8 @@ func ProcessRunBackupConfig(configFilePath string, config model.ConfigFile, dryR
 
 	}
 
-	if config.RobocopySettings != nil {
-		return fmt.Errorf("tarsnap backend does not support robocopy settings")
-	}
-
 	// Process folders
-	// - Populate TODO env var, for everything except robocopy
+	// - Populate TODO env var
 	{
 
 		// processFolder is a slice of: [string (path to backup), model.Folder (folder object)]
@@ -102,11 +77,19 @@ func ProcessRunBackupConfig(configFilePath string, config model.ConfigFile, dryR
 		}
 	}
 
-	return tarsnapGenerateInvocation3(config, dryRun, res)
+	if err := executeBackupInvocation(config, dryRun, res); err != nil {
+		return err
+	}
+
+	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
+		return err
+	}
+
+	return nil
 
 }
 
-func tarsnapGenerateInvocation3(config model.ConfigFile, dryRun bool, input runbackup.BackupRunObject) error {
+func executeBackupInvocation(config model.ConfigFile, dryRun bool, input runbackup.BackupRunObject) error {
 
 	tarsnapCredentials, err := config.GetTarsnapCredential()
 	if err != nil {

@@ -15,7 +15,7 @@ func (r ResticBackend) BackupShellScriptDiffCheck(configFilePath string, shellSc
 		return err
 	}
 
-	generatedBackupShellScriptContents, err := ProcessConfigGenerateBackup(configFilePath, config)
+	generatedBackupShellScriptContents, err := generateBackupScriptFromConfigFile(configFilePath, config)
 	if err != nil {
 		return err
 	}

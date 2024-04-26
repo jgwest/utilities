@@ -3,9 +3,7 @@ package robocopy
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
-	"os/exec"
 	"runtime"
 	"strings"
 
@@ -26,8 +24,7 @@ func (r RobocopyBackend) Backup(path string) error {
 		return err
 	}
 
-	// TODO: Re-enable tarsnap support for dry-run
-	if err := ProcessRunBackupConfig(path, config, false); err != nil {
+	if err := runBackupFromConfigFile(path, config); err != nil {
 		return err
 	}
 
@@ -35,32 +32,17 @@ func (r RobocopyBackend) Backup(path string) error {
 
 }
 
-func ProcessRunBackupConfig(configFilePath string, config model.ConfigFile, dryRun bool) error {
-
-	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
-		return err
-	}
+func runBackupFromConfigFile(configFilePath string, config model.ConfigFile) error {
 
 	res := runbackup.BackupRunObject{}
 
 	isWindows := runtime.GOOS == "windows"
 
-	if isWindows {
-		cmd := exec.Command("cmd", "/c", "echo %DATE%-%TIME:~1%")
-		var out strings.Builder
-		cmd.Stdout = &out
-
-		if err := cmd.Run(); err != nil {
-			log.Fatal(err)
-		}
-
-		res.BackupDateTime = out.String()
-
-	} else {
-		// 	backupDateTime.Out("BACKUP_DATE_TIME=`date +%F_%H:%M:%S`")
-
-		return fmt.Errorf("linux is unsupported")
+	backupDateTime, err := runbackup.GetCurrentTimeTag()
+	if err != nil {
+		return err
 	}
+	res.BackupDateTime = backupDateTime
 
 	if len(config.GlobalExcludes) > 0 {
 		return errors.New("robocopy does not support global excludes")
@@ -122,13 +104,13 @@ func ProcessRunBackupConfig(configFilePath string, config model.ConfigFile, dryR
 		}
 
 		// Ensure that none of the folders share a basename
-		if err := RobocopyValidateBasenames(processedFolders); err != nil {
+		if err := robocopyValidateBasenames(processedFolders); err != nil {
 			return err
 		}
 
 		if robocopyCredentials, err := config.GetRobocopyCredential(); err == nil {
 
-			robocopyFolders, err = RobocopyGenerateTargetPaths(processedFolders, robocopyCredentials)
+			robocopyFolders, err = robocopyGenerateTargetPaths(processedFolders, robocopyCredentials)
 			if err != nil {
 				return err
 			}
@@ -139,11 +121,18 @@ func ProcessRunBackupConfig(configFilePath string, config model.ConfigFile, dryR
 
 	}
 
-	return robocopyGenerateInvocation3(config, robocopyFolders, res)
+	if err := executionBackupInvocation(config, robocopyFolders, res); err != nil {
+		return err
+	}
 
+	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func robocopyGenerateInvocation3(config model.ConfigFile, robocopyFolders [][]string, input runbackup.BackupRunObject) error {
+func executionBackupInvocation(config model.ConfigFile, robocopyFolders [][]string, input runbackup.BackupRunObject) error {
 
 	robocopyCredentials, err := config.GetRobocopyCredential()
 	if err != nil {

@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
 
-	"github.com/jgwest/backup-cli/util"
 	"github.com/spf13/cobra"
 )
 
@@ -15,21 +13,7 @@ var quickCheckCmd = &cobra.Command{
 	Long:  "...",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		var configFile string
-
-		if len(args) == 1 && strings.HasSuffix(args[0], ".yaml") {
-			configFile = args[0]
-		} else if len(args) == 0 {
-			var err error
-			configFile, err = util.FindConfigFile()
-			if err != nil {
-				reportCLIErrorAndExit(err)
-				return
-			}
-		} else {
-			reportCLIErrorAndExit(fmt.Errorf("unexpected args"))
-			return
-		}
+		configFile := getOptionalConfigFilePath(args)
 
 		backend := retrieveBackendFromConfigFile(configFile)
 

@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// generateCmd represents the generate command
+// backupCmd represents the backup command
 var backupCmd = &cobra.Command{
 	Use:   "backup",
 	Short: "A brief description of your command",
@@ -18,12 +18,7 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 
-		if len(args) != 1 {
-			fmt.Println("args: (path to config file)")
-			return
-		}
-
-		pathToConfigFile := args[0]
+		pathToConfigFile := getOptionalConfigFilePath(args)
 
 		backend := retrieveBackendFromConfigFile(pathToConfigFile)
 

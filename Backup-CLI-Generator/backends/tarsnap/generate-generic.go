@@ -3,10 +3,10 @@ package tarsnap
 import (
 	"fmt"
 	"os"
-	"runtime"
 
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
+	"github.com/jgwest/backup-cli/util/cmds"
 )
 
 func (r TarsnapBackend) SupportsGenerateGeneric() bool {
@@ -20,12 +20,10 @@ func (r TarsnapBackend) GenerateGeneric(path string, outputPath string) error {
 		return err
 	}
 
-	resultBuffer, err := ProcessConfig(path, config, false)
+	result, err := generateGenericScriptFromConfigFile(path, config, false)
 	if err != nil {
 		return err
 	}
-
-	result := resultBuffer.ToString()
 
 	// If the output path already exists, don't overwrite it
 	if _, err := os.Stat(outputPath); err == nil {
@@ -41,30 +39,21 @@ func (r TarsnapBackend) GenerateGeneric(path string, outputPath string) error {
 	return nil
 }
 
-func ProcessConfig(configFilePath string, config model.ConfigFile, dryRun bool) (*util.OutputBuffer, error) {
+func generateGenericScriptFromConfigFile(configFilePath string, config model.ConfigFile, dryRun bool) (string, error) {
 
-	buffer := util.OutputBuffer{
-		IsWindows: runtime.GOOS == "windows",
+	nodes := util.NewTextNodes()
+
+	cmds.AddGenericPrefixNode(nodes)
+
+	if err := generateGenericInvocationNode(config, nodes); err != nil {
+		return "", err
 	}
 
-	if buffer.IsWindows {
-		buffer.Lines = []string{"@echo off", "setlocal"}
-		// https://stackoverflow.com/questions/17063947/get-current-batchfile-directory
-		buffer.Out("set SCRIPTPATH=\"%~f0\"")
-	} else {
-		buffer.Lines = []string{"#!/bin/bash", "", "set -eu"}
-		// https://stackoverflow.com/questions/4774054/reliable-way-for-a-bash-script-to-get-the-full-path-to-itself
-		buffer.Out("SCRIPTPATH=`realpath -s $0`")
-	}
+	return nodes.ToString()
 
-	if err := tarsnapGenerateGenericInvocation(config, &buffer); err != nil {
-		return nil, err
-	}
-
-	return &buffer, nil
 }
 
-func tarsnapGenerateGenericInvocation(config model.ConfigFile, buffer *util.OutputBuffer) error {
+func generateGenericInvocationNode(config model.ConfigFile, textNodes *util.TextNodes) error {
 
 	tarsnapCredentials, err := config.GetTarsnapCredential()
 	if err != nil {
@@ -75,9 +64,15 @@ func tarsnapGenerateGenericInvocation(config model.ConfigFile, buffer *util.Outp
 		return fmt.Errorf("tarsnap config path does not exist: '%s'", tarsnapCredentials.ConfigFilePath)
 	}
 
+	invocation := textNodes.NewTextNode()
+
+	invocation.Out()
+	invocation.Header("Invocation")
+
 	additionalParams := ""
-	if buffer.IsWindows {
+	if textNodes.IsWindows() {
 		additionalParams = "%*"
+
 	} else {
 		additionalParams = "$*"
 	}
@@ -87,12 +82,12 @@ func tarsnapGenerateGenericInvocation(config model.ConfigFile, buffer *util.Outp
 		tarsnapCredentials.ConfigFilePath,
 		additionalParams)
 
-	buffer.Out()
+	invocation.Out()
 
-	if buffer.IsWindows {
-		buffer.Out(cliInvocation)
+	if textNodes.IsWindows() {
+		invocation.Out(cliInvocation)
 	} else {
-		buffer.Out("bash -c \"" + cliInvocation + "\"")
+		invocation.Out("bash -c \"" + cliInvocation + "\"")
 	}
 
 	return nil

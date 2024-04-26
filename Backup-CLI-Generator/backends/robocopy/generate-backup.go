@@ -9,6 +9,7 @@ import (
 
 	"github.com/jgwest/backup-cli/model"
 	"github.com/jgwest/backup-cli/util"
+	"github.com/jgwest/backup-cli/util/cmds"
 	"github.com/jgwest/backup-cli/util/cmds/generate"
 )
 
@@ -23,7 +24,7 @@ func (r RobocopyBackend) GenerateBackup(path string, outputPath string) error {
 		return err
 	}
 
-	result, err := processGenerateBackupConfig(path, config)
+	result, err := generateBackupScriptFromConfigFile(path, config)
 	if err != nil {
 		return err
 	}
@@ -43,7 +44,7 @@ func (r RobocopyBackend) GenerateBackup(path string, outputPath string) error {
 
 }
 
-func processGenerateBackupConfig(configFilePath string, config model.ConfigFile) (string, error) {
+func generateBackupScriptFromConfigFile(configFilePath string, config model.ConfigFile) (string, error) {
 
 	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
 		return "", err
@@ -51,17 +52,7 @@ func processGenerateBackupConfig(configFilePath string, config model.ConfigFile)
 
 	nodes := util.NewTextNodes()
 
-	prefixNode := nodes.NewPrefixTextNode()
-	if nodes.IsWindows() {
-		// https://stackoverflow.com/questions/17063947/get-current-batchfile-directory
-		prefixNode.Out("@echo off", "setlocal")
-		prefixNode.Out("set SCRIPTPATH=\"%~f0\"")
-	} else {
-		prefixNode.Out("#!/bin/bash", "", "set -eu")
-		// https://stackoverflow.com/questions/4774054/reliable-way-for-a-bash-script-to-get-the-full-path-to-itself
-		prefixNode.Out("SCRIPTPATH=`realpath -s $0`")
-	}
-	prefixNode.AddExports("SCRIPTPATH")
+	cmds.AddGenericPrefixNode(nodes)
 
 	if config.Metadata != nil {
 
@@ -154,7 +145,6 @@ func processGenerateBackupConfig(configFilePath string, config model.ConfigFile)
 	var robocopyFolders [][]string
 
 	// Process folders
-	// - Populate TODO env var, for everything except robocopy
 	// - For robocopy, populate robocopyFolders
 	{
 		foldersNode := nodes.NewTextNode()
@@ -174,13 +164,13 @@ func processGenerateBackupConfig(configFilePath string, config model.ConfigFile)
 		}
 
 		// Ensure that none of the folders share a basename
-		if err := RobocopyValidateBasenames(processedFolders); err != nil {
+		if err := robocopyValidateBasenames(processedFolders); err != nil {
 			return "", err
 		}
 
 		if robocopyCredentials, err := config.GetRobocopyCredential(); err == nil {
 
-			robocopyFolders, err = RobocopyGenerateTargetPaths(processedFolders, robocopyCredentials)
+			robocopyFolders, err = robocopyGenerateTargetPaths(processedFolders, robocopyCredentials)
 			if err != nil {
 				return "", err
 			}
@@ -191,7 +181,7 @@ func processGenerateBackupConfig(configFilePath string, config model.ConfigFile)
 
 	} // end 'process folders' section
 
-	invocationNode, err := robocopyGenerateInvocation2(config, robocopyFolders, nodes)
+	invocationNode, err := generateBackupInvocationNode(config, robocopyFolders, nodes)
 	if err != nil {
 		return "", err
 	}
@@ -205,7 +195,7 @@ func processGenerateBackupConfig(configFilePath string, config model.ConfigFile)
 	return nodes.ToString()
 }
 
-func robocopyGenerateInvocation2(config model.ConfigFile, robocopyFolders [][]string, textNodes *util.TextNodes) (*util.TextNode, error) {
+func generateBackupInvocationNode(config model.ConfigFile, robocopyFolders [][]string, textNodes *util.TextNodes) (*util.TextNode, error) {
 
 	robocopyCredentials, err := config.GetRobocopyCredential()
 	if err != nil {
@@ -247,14 +237,14 @@ func robocopyGenerateInvocation2(config model.ConfigFile, robocopyFolders [][]st
 	return textNode, nil
 }
 
-// RobocopyGenerateTargetPaths returns a slice of:
+// robocopyGenerateTargetPaths returns a slice of:
 // - source folder path
 // - destination folder (with basename of source folder appended)
 // Example:
 // - [C:\Users] -> [B:\backup\C-Users]
 // - [D:\Users] -> [B:\backup\D-Users]
 // - [C:\To-Backup] -> [B:\backup\To-Backup]
-func RobocopyGenerateTargetPaths(processedFolders [][]interface{}, robocopyCredentials model.RobocopyCredentials) ([][]string, error) {
+func robocopyGenerateTargetPaths(processedFolders [][]interface{}, robocopyCredentials model.RobocopyCredentials) ([][]string, error) {
 	res := [][]string{}
 
 	targetFolder := robocopyCredentials.DestinationFolder
@@ -291,8 +281,8 @@ func RobocopyGenerateTargetPaths(processedFolders [][]interface{}, robocopyCrede
 
 }
 
-// RobocopyValidateBasenames ensures that none of the folders share a basename
-func RobocopyValidateBasenames(processedFolders [][]interface{}) error {
+// robocopyValidateBasenames ensures that none of the folders share a basename
+func robocopyValidateBasenames(processedFolders [][]interface{}) error {
 
 	basenameMap := map[string]interface{}{}
 	for _, robocopyFolder := range processedFolders {
