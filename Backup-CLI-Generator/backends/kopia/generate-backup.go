@@ -45,7 +45,7 @@ func (r KopiaBackend) GenerateBackup(path string, outputPath string) error {
 
 func generateBackupScriptFromConfigFile(configFilePath string, config model.ConfigFile) (string, error) {
 
-	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
+	if err := generate.CheckMonitorFoldersForMissingChildren(configFilePath, config); err != nil {
 		return "", err
 	}
 
@@ -53,22 +53,24 @@ func generateBackupScriptFromConfigFile(configFilePath string, config model.Conf
 
 	cmds.AddGenericPrefixNode(nodes)
 
+	// Add BACKUP_DATA_TIME env var, if required
 	if config.Metadata != nil {
-
-		backupDateTime := nodes.NewTextNode()
 
 		if config.Metadata.Name == "" {
 			return "", fmt.Errorf("if metadata is specified, then name must be specified")
 		}
 
 		if config.Metadata.AppendDateTime {
+			backupDateTime := nodes.NewTextNode()
+
 			if nodes.IsWindows() {
 				backupDateTime.Out("set BACKUP_DATE_TIME=%DATE%-%TIME:~1%")
 			} else {
 				backupDateTime.Out("BACKUP_DATE_TIME=`date +%F_%H:%M:%S`")
 			}
+
+			backupDateTime.AddExports("BACKUP_DATE_TIME")
 		}
-		backupDateTime.AddExports("BACKUP_DATE_TIME")
 	}
 
 	excludesNode := nodes.NewTextNode()
@@ -166,31 +168,6 @@ func generateBackupScriptFromConfigFile(configFilePath string, config model.Conf
 	return nodes.ToString()
 }
 
-func getAndValidateKopiaCredentials(config model.ConfigFile) (*model.KopiaCredentials, error) {
-	kopiaCredentials, err := config.GetKopiaCredential()
-	if err != nil {
-		return nil, err
-	}
-
-	if kopiaCredentials.S3 == nil || kopiaCredentials.KopiaS3 == nil {
-		return nil, fmt.Errorf("missing S3 credentials")
-	}
-
-	if kopiaCredentials.S3.AccessKeyID == "" || kopiaCredentials.S3.SecretAccessKey == "" {
-		return nil, fmt.Errorf("missing S3 credential values: access key/secret access key")
-	}
-
-	if kopiaCredentials.KopiaS3.Bucket == "" || kopiaCredentials.KopiaS3.Endpoint == "" {
-		return nil, fmt.Errorf("missing S3 credential values: bucket/endpoint")
-	}
-
-	if kopiaCredentials.Password == "" {
-		return nil, fmt.Errorf("missing kopia password")
-	}
-
-	return &kopiaCredentials, nil
-}
-
 func generateBackupInvocationNode(kopiaPolicyExcludes map[string][]string, config model.ConfigFile, textNodes *util.TextNodes) (*util.TextNode, error) {
 
 	textNode := textNodes.NewTextNode()
@@ -200,10 +177,11 @@ func generateBackupInvocationNode(kopiaPolicyExcludes map[string][]string, confi
 		return nil, err
 	}
 
+	// Set credentials env vars
 	{
 
 		textNode.Out()
-		textNode.Header("Credentials ")
+		textNode.Header("Credentials")
 		textNode.SetEnv("AWS_ACCESS_KEY_ID", kopiaCredentials.S3.AccessKeyID)
 		textNode.SetEnv("AWS_SECRET_ACCESS_KEY", kopiaCredentials.S3.SecretAccessKey)
 
@@ -229,7 +207,7 @@ func generateBackupInvocationNode(kopiaPolicyExcludes map[string][]string, confi
 		textNode.Out(cliInvocation)
 	}
 
-	// Build
+	// For each local path, call set policy with the ignores for that path
 	if len(kopiaPolicyExcludes) > 0 {
 		textNode.Out()
 		textNode.Header("Add policy excludes")

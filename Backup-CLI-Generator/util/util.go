@@ -55,6 +55,7 @@ type DirectInvocation struct {
 
 func (di DirectInvocation) Execute() error {
 
+	fmt.Println("-------------------------------------------------------------------")
 	fmt.Println("Environment Variables:")
 	envList := os.Environ()
 	for k, v := range di.EnvironmentVariables {

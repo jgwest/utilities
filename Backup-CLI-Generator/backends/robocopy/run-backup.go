@@ -3,7 +3,6 @@ package robocopy
 import (
 	"errors"
 	"fmt"
-	"os"
 	"runtime"
 	"strings"
 
@@ -121,40 +120,23 @@ func runBackupFromConfigFile(configFilePath string, config model.ConfigFile) err
 
 	}
 
-	if err := executionBackupInvocation(config, robocopyFolders, res); err != nil {
+	if err := executeBackupInvocation(config, robocopyFolders, res); err != nil {
 		return err
 	}
 
-	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
+	if err := generate.CheckMonitorFoldersForMissingChildren(configFilePath, config); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func executionBackupInvocation(config model.ConfigFile, robocopyFolders [][]string, input runbackup.BackupRunObject) error {
+func executeBackupInvocation(config model.ConfigFile, robocopyFolders [][]string, input runbackup.BackupRunObject) error {
 
-	robocopyCredentials, err := config.GetRobocopyCredential()
+	robocopyCredentials, err := getAndValidateRobocopyCredentials(config)
 	if err != nil {
 		return err
 	}
-
-	if robocopyCredentials.DestinationFolder == "" {
-		return errors.New("missing destination folder")
-	}
-
-	if robocopyCredentials.Switches == "" {
-		return errors.New("missing switches")
-	}
-
-	if config.Metadata != nil && (config.Metadata.Name != "" || config.Metadata.AppendDateTime) {
-		return fmt.Errorf("metadata features are not supported with robocopy")
-	}
-
-	if _, err := os.Stat(robocopyCredentials.DestinationFolder); os.IsNotExist(err) {
-		return fmt.Errorf("robocopy destination folder does not exist: '%s'", robocopyCredentials.DestinationFolder)
-	}
-
 	switches := []string{}
 
 	// Add switches from config gile
@@ -171,14 +153,24 @@ func executionBackupInvocation(config model.ConfigFile, robocopyFolders [][]stri
 
 	for _, folderTuple := range robocopyFolders {
 
+		srcFolder, destFolder := folderTuple[0], folderTuple[1]
+
 		cliInvocation := []string{
 			"robocopy",
-			folderTuple[0], // srcFolder
-			folderTuple[1], // destFolder
+			srcFolder,
+			destFolder,
 		}
 		cliInvocation = append(cliInvocation, switches...)
 
-		fmt.Println("exec:", cliInvocation)
+		robocopyDI := util.DirectInvocation{
+			Args:                 cliInvocation,
+			EnvironmentVariables: map[string]string{},
+		}
+
+		if err := robocopyDI.Execute(); err != nil {
+			return err
+		}
+
 	}
 
 	return nil

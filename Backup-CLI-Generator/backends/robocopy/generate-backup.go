@@ -46,7 +46,7 @@ func (r RobocopyBackend) GenerateBackup(path string, outputPath string) error {
 
 func generateBackupScriptFromConfigFile(configFilePath string, config model.ConfigFile) (string, error) {
 
-	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
+	if err := generate.CheckMonitorFoldersForMissingChildren(configFilePath, config); err != nil {
 		return "", err
 	}
 
@@ -195,8 +195,7 @@ func generateBackupScriptFromConfigFile(configFilePath string, config model.Conf
 	return nodes.ToString()
 }
 
-func generateBackupInvocationNode(config model.ConfigFile, robocopyFolders [][]string, textNodes *util.TextNodes) (*util.TextNode, error) {
-
+func getAndValidateRobocopyCredentials(config model.ConfigFile) (*model.RobocopyCredentials, error) {
 	robocopyCredentials, err := config.GetRobocopyCredential()
 	if err != nil {
 		return nil, err
@@ -216,6 +215,17 @@ func generateBackupInvocationNode(config model.ConfigFile, robocopyFolders [][]s
 
 	if _, err := os.Stat(robocopyCredentials.DestinationFolder); os.IsNotExist(err) {
 		return nil, fmt.Errorf("robocopy destination folder does not exist: '%s'", robocopyCredentials.DestinationFolder)
+	}
+
+	return &robocopyCredentials, nil
+
+}
+
+func generateBackupInvocationNode(config model.ConfigFile, robocopyFolders [][]string, textNodes *util.TextNodes) (*util.TextNode, error) {
+
+	robocopyCredentials, err := getAndValidateRobocopyCredentials(config)
+	if err != nil {
+		return nil, err
 	}
 
 	textNode := textNodes.NewTextNode()

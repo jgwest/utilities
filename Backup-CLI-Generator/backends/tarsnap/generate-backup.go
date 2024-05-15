@@ -44,7 +44,7 @@ func (r TarsnapBackend) GenerateBackup(path string, outputPath string) error {
 
 func generateBackupScriptFromConfigFile(configFilePath string, config model.ConfigFile, dryRun bool) (string, error) {
 
-	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
+	if err := generate.CheckMonitorFoldersForMissingChildren(configFilePath, config); err != nil {
 		return "", err
 	}
 

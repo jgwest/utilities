@@ -10,7 +10,7 @@ import (
 )
 
 // checkMonitorFolders verifies that there are no unignored child folders of monitor folders.
-func CheckMonitorFolders(configFilePath string, config model.ConfigFile) error {
+func CheckMonitorFoldersForMissingChildren(configFilePath string, config model.ConfigFile) error {
 
 	if len(config.MonitorFolders) == 0 {
 		return nil

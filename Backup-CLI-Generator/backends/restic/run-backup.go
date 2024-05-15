@@ -80,7 +80,7 @@ func runBackupFromConfigFile(configFilePath string, config model.ConfigFile) err
 		return err
 	}
 
-	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
+	if err := generate.CheckMonitorFoldersForMissingChildren(configFilePath, config); err != nil {
 		return err
 	}
 

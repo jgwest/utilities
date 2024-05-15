@@ -49,7 +49,7 @@ func generateBackupScriptFromConfigFile(configFilePath string, config model.Conf
 		return "", err
 	}
 
-	if err := generate.CheckMonitorFolders(configFilePath, config); err != nil {
+	if err := generate.CheckMonitorFoldersForMissingChildren(configFilePath, config); err != nil {
 		return "", err
 	}
 
