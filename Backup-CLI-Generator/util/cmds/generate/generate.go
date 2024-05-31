@@ -69,11 +69,16 @@ func CheckMonitorFoldersForMissingChildren(configFilePath string, config model.C
 	return nil
 }
 
-// PopulateProcessedFolders performs error checking on config file folders, then returns
-// the a tuple containing (folder path to backup, folder object)
-func PopulateProcessedFolders(configType model.ConfigType, configFolders []model.Folder, configFileSubstitutions []model.Substitution, kopiaPolicyExcludes map[string][]string) ([][]interface{}, error) {
+type PopulateProcessFoldersResultEntry struct {
+	SrcFolderPath string
+	Folder        model.Folder
+}
 
-	var processedFolders [][]interface{}
+// PopulateProcessedFolders performs error checking on config file folders, then returns
+// a tuple containing (folder path to backup, folder object)
+func PopulateProcessedFolders(configType model.ConfigType, configFolders []model.Folder, configFileSubstitutions []model.Substitution, kopiaPolicyExcludes map[string][]string) ([]PopulateProcessFoldersResultEntry, error) {
+
+	var processedFolders []PopulateProcessFoldersResultEntry
 	// Array of interfaces, containing:
 	// - path of folder to backup
 	// - the corresponding 'Folder' object
@@ -81,14 +86,6 @@ func PopulateProcessedFolders(configType model.ConfigType, configFolders []model
 	// Populate processedFolders with list of folders to backup, and perform sanity tests
 	checkDupesMap := map[string] /* source folder path -> not used */ interface{}{}
 	for _, folder := range configFolders {
-
-		// if len(folder.Excludes) != 0 &&
-		// 	(configType == model.Restic ||
-		// 		configType == model.Tarsnap ||
-		// 		configType == model.Kopia ||
-		// 		configType == model.Robocopy) {
-		// 	return nil, fmt.Errorf("backup utility '%s' does not support local excludes", configType)
-		// }
 
 		if folder.Robocopy != nil && configType != model.Robocopy {
 			return nil, fmt.Errorf("backup utility '%s' does not support robocopy folder entries", configType)
@@ -117,7 +114,7 @@ func PopulateProcessedFolders(configType model.ConfigType, configFolders []model
 			kopiaPolicyExcludes[srcFolderPath] = append(kopiaPolicyExcludes[srcFolderPath], folder.Excludes...)
 		}
 
-		processedFolders = append(processedFolders, []interface{}{srcFolderPath, folder})
+		processedFolders = append(processedFolders, PopulateProcessFoldersResultEntry{SrcFolderPath: srcFolderPath, Folder: folder})
 	}
 
 	return processedFolders, nil

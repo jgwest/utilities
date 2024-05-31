@@ -4,10 +4,10 @@ import (
 	"fmt"
 )
 
-func (r SampleBackend) SupportsQuickCheck() bool {
+func (SampleBackend) SupportsQuickCheck() bool {
 	return false
 }
 
-func (r SampleBackend) QuickCheck(path string) error {
+func (SampleBackend) QuickCheck(path string) error {
 	return fmt.Errorf("unsupported")
 }

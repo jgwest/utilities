@@ -13,11 +13,11 @@ import (
 	"github.com/jgwest/backup-cli/util/cmds/generate"
 )
 
-func (r RobocopyBackend) SupportsGenerateBackup() bool {
+func (RobocopyBackend) SupportsGenerateBackup() bool {
 	return true
 }
 
-func (r RobocopyBackend) GenerateBackup(path string, outputPath string) error {
+func (RobocopyBackend) GenerateBackup(path string, outputPath string) error {
 
 	config, err := extractAndValidateConfigFile(path)
 	if err != nil {
@@ -254,22 +254,16 @@ func generateBackupInvocationNode(config model.ConfigFile, robocopyFolders [][]s
 // - [C:\Users] -> [B:\backup\C-Users]
 // - [D:\Users] -> [B:\backup\D-Users]
 // - [C:\To-Backup] -> [B:\backup\To-Backup]
-func robocopyGenerateTargetPaths(processedFolders [][]interface{}, robocopyCredentials model.RobocopyCredentials) ([][]string, error) {
+func robocopyGenerateTargetPaths(processedFolders []generate.PopulateProcessFoldersResultEntry, robocopyCredentials model.RobocopyCredentials) ([][]string, error) {
 	res := [][]string{}
 
 	targetFolder := robocopyCredentials.DestinationFolder
 
 	for _, robocopyFolder := range processedFolders {
 
-		robocopySrcFolderPath, ok := (robocopyFolder[0]).(string)
-		if !ok {
-			return nil, fmt.Errorf("invalid robocopyFolderPath")
-		}
+		robocopySrcFolderPath := robocopyFolder.SrcFolderPath
 
-		folderEntry, ok := (robocopyFolder[1]).(model.Folder)
-		if !ok {
-			return nil, fmt.Errorf("invalid robocopyFolder")
-		}
+		folderEntry := robocopyFolder.Folder
 
 		// Use the name of the src folder as the dest folder name, unless
 		// a replacement is specified in the folder entry.
@@ -292,20 +286,14 @@ func robocopyGenerateTargetPaths(processedFolders [][]interface{}, robocopyCrede
 }
 
 // robocopyValidateBasenames ensures that none of the folders share a basename
-func robocopyValidateBasenames(processedFolders [][]interface{}) error {
+func robocopyValidateBasenames(processedFolders []generate.PopulateProcessFoldersResultEntry) error {
 
 	basenameMap := map[string]interface{}{}
 	for _, robocopyFolder := range processedFolders {
 
-		robocopyFolderPath, ok := (robocopyFolder[0]).(string)
-		if !ok {
-			return fmt.Errorf("invalid robocopyFolderPath")
-		}
+		robocopyFolderPath := robocopyFolder.SrcFolderPath
 
-		folderEntry, ok := (robocopyFolder[1]).(model.Folder)
-		if !ok {
-			return fmt.Errorf("invalid robocopyFolder")
-		}
+		folderEntry := robocopyFolder.Folder
 
 		// Use the name of the src folder as the dest folder name, unless
 		// a replacement is specified in the folder entry.

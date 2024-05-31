@@ -4,10 +4,10 @@ import (
 	"fmt"
 )
 
-func (r RobocopyBackend) SupportsQuickCheck() bool {
+func (RobocopyBackend) SupportsQuickCheck() bool {
 	return false
 }
 
-func (r RobocopyBackend) QuickCheck(path string) error {
+func (RobocopyBackend) QuickCheck(path string) error {
 	return fmt.Errorf("unsupported")
 }

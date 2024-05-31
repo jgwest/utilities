@@ -4,53 +4,54 @@ import (
 	"testing"
 
 	"github.com/jgwest/backup-cli/model"
+	"github.com/jgwest/backup-cli/util/cmds/generate"
 )
 
 func TestValidateRobocopyBasenames(t *testing.T) {
 
 	for _, c := range []struct {
 		name      string
-		input     [][]interface{}
+		input     []generate.PopulateProcessFoldersResultEntry
 		expectErr bool
 	}{
 		{
 			name:      "empty",
-			input:     [][]interface{}{},
+			input:     []generate.PopulateProcessFoldersResultEntry{},
 			expectErr: false,
 		},
 
 		{
 			name: "one entry",
-			input: [][]interface{}{
-				{"/path", model.Folder{Path: "/path"}},
+			input: []generate.PopulateProcessFoldersResultEntry{
+				{SrcFolderPath: "/path", Folder: model.Folder{Path: "/path"}},
 			},
 			expectErr: false,
 		},
 
 		{
 			name: "two entries",
-			input: [][]interface{}{
-				{"/path", model.Folder{Path: "/path"}},
-				{"/path2", model.Folder{Path: "/path2"}},
+			input: []generate.PopulateProcessFoldersResultEntry{
+				{SrcFolderPath: "/path", Folder: model.Folder{Path: "/path"}},
+				{SrcFolderPath: "/path2", Folder: model.Folder{Path: "/path2"}},
 			},
 			expectErr: false,
 		},
 
 		{
 			name: "matching entries: regular",
-			input: [][]interface{}{
-				{"/path", model.Folder{Path: "/path"}},
-				{"/path", model.Folder{Path: "/path"}},
+			input: []generate.PopulateProcessFoldersResultEntry{
+				{SrcFolderPath: "/path", Folder: model.Folder{Path: "/path"}},
+				{SrcFolderPath: "/path", Folder: model.Folder{Path: "/path"}},
 			},
 			expectErr: true,
 		},
 
 		{
 			name: "matching entries: dest folder name match",
-			input: [][]interface{}{
+			input: []generate.PopulateProcessFoldersResultEntry{
 
-				{"/path", model.Folder{Path: "/path"}},
-				{"/path2", model.Folder{
+				{SrcFolderPath: "/path", Folder: model.Folder{Path: "/path"}},
+				{SrcFolderPath: "/path2", Folder: model.Folder{
 					Path: "/path2",
 					Robocopy: &model.RobocopyFolderSettings{
 						DestFolderName: "path",

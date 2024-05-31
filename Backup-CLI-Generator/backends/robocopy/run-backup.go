@@ -12,11 +12,15 @@ import (
 	runbackup "github.com/jgwest/backup-cli/util/cmds/run-backup"
 )
 
-func (r RobocopyBackend) SupportsBackup() bool {
+func (RobocopyBackend) SupportsBackup() bool {
 	return true
 }
 
-func (r RobocopyBackend) Backup(path string) error {
+func (RobocopyBackend) Backup(path string, rehashSource bool) error {
+
+	if rehashSource {
+		return fmt.Errorf("unsupported flag: rehash source")
+	}
 
 	config, err := extractAndValidateConfigFile(path)
 	if err != nil {
@@ -139,7 +143,7 @@ func executeBackupInvocation(config model.ConfigFile, robocopyFolders [][]string
 	}
 	switches := []string{}
 
-	// Add switches from config gile
+	// Add switches from config file
 	switches = append(switches, strings.Fields(robocopyCredentials.Switches)...)
 
 	// Add file and folder excludes

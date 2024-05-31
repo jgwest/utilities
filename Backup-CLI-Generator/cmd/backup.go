@@ -27,7 +27,7 @@ to quickly create a Cobra application.`,
 			return
 		}
 
-		if err := backend.Backup(pathToConfigFile); err != nil {
+		if err := backend.Backup(pathToConfigFile, rehashSource); err != nil {
 			reportCLIErrorAndExit(err)
 			return
 		}
@@ -35,7 +35,12 @@ to quickly create a Cobra application.`,
 	},
 }
 
+var rehashSource bool
+
 func init() {
+
+	backupCmd.Flags().BoolVarP(&rehashSource, "rehash-source", "r", false, "When deciding what files to backup, rehash the source files")
+
 	rootCmd.AddCommand(backupCmd)
 
 }

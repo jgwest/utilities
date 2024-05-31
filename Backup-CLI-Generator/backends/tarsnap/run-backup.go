@@ -10,11 +10,15 @@ import (
 	runbackup "github.com/jgwest/backup-cli/util/cmds/run-backup"
 )
 
-func (r TarsnapBackend) SupportsBackup() bool {
+func (TarsnapBackend) SupportsBackup() bool {
 	return true
 }
 
-func (r TarsnapBackend) Backup(path string) error {
+func (TarsnapBackend) Backup(path string, rehashSource bool) error {
+
+	if rehashSource {
+		return fmt.Errorf("unsupported flag: rehash source")
+	}
 
 	config, err := extractAndValidateConfigFile(path)
 	if err != nil {
@@ -66,10 +70,7 @@ func runBackupFromConfigFile(configFilePath string, config model.ConfigFile, dry
 
 		for _, processedFolder := range processedFolders {
 
-			folderPath, ok := (processedFolder[0]).(string)
-			if !ok {
-				return fmt.Errorf("invalid non-robocopy folderPath")
-			}
+			folderPath := processedFolder.SrcFolderPath
 
 			// The unsubstituted path is used here
 			res.Todo = append(res.Todo, folderPath)

@@ -4,10 +4,10 @@ import (
 	"fmt"
 )
 
-func (r RobocopyBackend) SupportsRun() bool {
+func (RobocopyBackend) SupportsRun() bool {
 	return false
 }
 
-func (r RobocopyBackend) Run(path string, args []string) error {
+func (RobocopyBackend) Run(path string, args []string) error {
 	return fmt.Errorf("unsupported")
 }

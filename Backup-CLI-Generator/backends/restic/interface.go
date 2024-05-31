@@ -11,3 +11,14 @@ type ResticBackend struct{}
 func (r ResticBackend) ConfigType() model.ConfigType {
 	return model.Restic
 }
+
+func generateResticBackend() model.BackendStruct {
+
+	rb := ResticBackend{}
+
+	res := model.BackendStruct{
+		ConfigType: rb.ConfigType,
+	}
+
+	return res
+}

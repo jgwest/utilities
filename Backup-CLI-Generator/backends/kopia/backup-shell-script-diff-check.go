@@ -4,11 +4,11 @@ import (
 	diffgeneratedbackupscript "github.com/jgwest/backup-cli/util/cmds/diff-generated-backup-script"
 )
 
-func (r KopiaBackend) SupportsBackupShellScriptDiffCheck() bool {
+func (KopiaBackend) SupportsBackupShellScriptDiffCheck() bool {
 	return true
 }
 
-func (r KopiaBackend) BackupShellScriptDiffCheck(configFilePath string, shellScriptPath string) error {
+func (KopiaBackend) BackupShellScriptDiffCheck(configFilePath string, shellScriptPath string) error {
 
 	config, err := extractAndValidateConfigFile(configFilePath)
 	if err != nil {

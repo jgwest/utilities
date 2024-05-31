@@ -4,10 +4,14 @@ import (
 	"fmt"
 )
 
-func (r SampleBackend) SupportsBackup() bool {
+func (SampleBackend) SupportsBackup() bool {
 	return false
 }
 
-func (r SampleBackend) Backup(path string) error {
+func (SampleBackend) Backup(path string, rehashSource bool) error {
+
+	if rehashSource {
+		return fmt.Errorf("unsupported flag: rehash source")
+	}
 	return fmt.Errorf("unsupported")
 }

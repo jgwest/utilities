@@ -8,6 +8,6 @@ type KopiaBackend struct{}
 
 var _ model.Backend = KopiaBackend{}
 
-func (r KopiaBackend) ConfigType() model.ConfigType {
-	return "sample"
+func (KopiaBackend) ConfigType() model.ConfigType {
+	return model.Kopia
 }

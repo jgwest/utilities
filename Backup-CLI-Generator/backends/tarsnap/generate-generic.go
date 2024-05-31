@@ -9,11 +9,11 @@ import (
 	"github.com/jgwest/backup-cli/util/cmds"
 )
 
-func (r TarsnapBackend) SupportsGenerateGeneric() bool {
+func (TarsnapBackend) SupportsGenerateGeneric() bool {
 	return true
 }
 
-func (r TarsnapBackend) GenerateGeneric(path string, outputPath string) error {
+func (TarsnapBackend) GenerateGeneric(path string, outputPath string) error {
 
 	config, err := extractAndValidateConfigFile(path)
 	if err != nil {

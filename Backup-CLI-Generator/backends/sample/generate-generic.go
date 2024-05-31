@@ -4,10 +4,10 @@ import (
 	"fmt"
 )
 
-func (r SampleBackend) SupportsGenerateGeneric() bool {
+func (SampleBackend) SupportsGenerateGeneric() bool {
 	return false
 }
 
-func (r SampleBackend) GenerateGeneric(path string, outputPath string) error {
+func (SampleBackend) GenerateGeneric(path string, outputPath string) error {
 	return fmt.Errorf("unsupported")
 }

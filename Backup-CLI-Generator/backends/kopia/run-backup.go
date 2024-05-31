@@ -9,11 +9,15 @@ import (
 	runbackup "github.com/jgwest/backup-cli/util/cmds/run-backup"
 )
 
-func (r KopiaBackend) SupportsBackup() bool {
+func (KopiaBackend) SupportsBackup() bool {
 	return true
 }
 
-func (r KopiaBackend) Backup(path string) error {
+func (KopiaBackend) Backup(path string, rehashSource bool) error {
+
+	if rehashSource {
+		return fmt.Errorf("unsupported flag: rehash source")
+	}
 
 	config, err := extractAndValidateConfigFile(path)
 	if err != nil {
@@ -69,10 +73,7 @@ func runBackupFromConfigFile(configFilePath string, config model.ConfigFile) err
 
 		for _, processedFolder := range processedFolders {
 
-			folderPath, ok := (processedFolder[0]).(string)
-			if !ok {
-				return fmt.Errorf("invalid non-robocopy folderPath")
-			}
+			folderPath := processedFolder.SrcFolderPath
 
 			// The unsubstituted path is used here
 			res.Todo = append(res.Todo, folderPath)

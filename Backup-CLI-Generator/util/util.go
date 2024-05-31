@@ -18,7 +18,7 @@ func FixWindowsPathSuffix(input string) string {
 	return input
 }
 
-// expand returns the input string, replacing $var with config file substitutions, or env vars, in that order.
+// Expand returns the input string, replacing $var with config file substitutions, or env vars, in that order.
 func Expand(input string, configFileSubstitutions []model.Substitution) (output string, err error) {
 
 	substitutions := map[string]string{}
@@ -71,13 +71,29 @@ func (di DirectInvocation) Execute() error {
 	}
 	fmt.Println()
 
+	if di.Args[1] != "sync" {
+		return fmt.Errorf("arg 2 should be sync")
+	}
+
+	srcArg := di.Args[2]
+	if strings.HasPrefix(strings.ToLower(srcArg), "b:") ||
+		strings.HasPrefix(strings.ToLower(srcArg), "m:") {
+		return fmt.Errorf("arg 2 should not be a backup drive")
+	}
+
+	destArg := di.Args[3]
+	if !strings.HasPrefix(strings.ToLower(destArg), "b:") &&
+		!strings.HasPrefix(strings.ToLower(destArg), "m:") {
+		return fmt.Errorf("arg 3 should be a backup drive")
+	}
+
 	cmd := exec.Command(di.Args[0], di.Args[1:]...)
 	cmd.Env = envList
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		return err
+		return fmt.Errorf("error from command execution: %w", err)
 	}
 
 	return nil

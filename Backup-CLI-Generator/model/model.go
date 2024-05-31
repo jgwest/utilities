@@ -33,9 +33,14 @@ type Folder struct {
 	Path     string                  `yaml:"path"`
 	Excludes []string                `yaml:"excludes,omitempty"`
 	Robocopy *RobocopyFolderSettings `yaml:"robocopy,omitempty"`
+	Rclone   *RcloneFolderSettings   `yaml:"rclone,omitempty"`
 }
 
 type RobocopyFolderSettings struct {
+	DestFolderName string `yaml:"destFolderName"`
+}
+
+type RcloneFolderSettings struct {
 	DestFolderName string `yaml:"destFolderName"`
 }
 
@@ -49,10 +54,15 @@ type Credentials struct {
 	Kopia    *KopiaCredentials    `yaml:"kopia,omitempty"`
 	Tarsnap  *TarsnapCredentials  `yaml:"tarsnap,omitempty"`
 	Robocopy *RobocopyCredentials `yaml:"robocopy,omitempty"`
+	Rclone   *RcloneCredentials   `yaml:"rclone,omitempty"`
 }
 
 type RobocopyCredentials struct {
 	Switches          string `yaml:"switches"`
+	DestinationFolder string `yaml:"destinationFolder"`
+}
+
+type RcloneCredentials struct {
 	DestinationFolder string `yaml:"destinationFolder"`
 }
 
@@ -94,10 +104,11 @@ type RobocopySettings struct {
 type ConfigType string
 
 const (
-	Restic   = "Restic"
-	Kopia    = "Kopia"
-	Tarsnap  = "Tarsnap"
-	Robocopy = "Robocopy"
+	Restic   ConfigType = "Restic"
+	Kopia    ConfigType = "Kopia"
+	Tarsnap  ConfigType = "Tarsnap"
+	Robocopy ConfigType = "Robocopy"
+	Rclone   ConfigType = "Rclone"
 )
 
 func ReadConfigFile(path string) (ConfigFile, error) {
@@ -214,6 +225,10 @@ func (cf *ConfigFile) GetConfigType() (ConfigType, error) {
 			count++
 		}
 
+		if credential.Rclone != nil {
+			count++
+		}
+
 		if count != 1 {
 			return "", fmt.Errorf("unexpected number of credentials: %v", count)
 		}
@@ -236,6 +251,10 @@ func (cf *ConfigFile) GetConfigType() (ConfigType, error) {
 
 	if credential.Robocopy != nil {
 		return Robocopy, nil
+	}
+
+	if credential.Rclone != nil {
+		return Rclone, nil
 	}
 
 	return "", errors.New("no credentials found")
@@ -265,6 +284,19 @@ func (cf *ConfigFile) GetKopiaCredential() (KopiaCredentials, error) {
 	}
 
 	return *cf.Credentials[0].Kopia, nil
+}
+
+func (cf *ConfigFile) GetRcloneCredential() (RcloneCredentials, error) {
+
+	// Must have a single restic credential
+	if confType, err := cf.GetConfigType(); confType != Rclone || err != nil {
+		if err == nil {
+			err = errors.New("invalid rclone credentials")
+		}
+		return RcloneCredentials{}, err
+	}
+
+	return *cf.Credentials[0].Rclone, nil
 }
 
 func (cf *ConfigFile) GetResticCredential() (ResticCredentials, error) {

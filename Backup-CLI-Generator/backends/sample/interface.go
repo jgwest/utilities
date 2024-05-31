@@ -8,6 +8,6 @@ type SampleBackend struct{}
 
 var _ model.Backend = SampleBackend{}
 
-func (r SampleBackend) ConfigType() model.ConfigType {
+func (SampleBackend) ConfigType() model.ConfigType {
 	return "sample"
 }

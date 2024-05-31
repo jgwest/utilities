@@ -89,7 +89,7 @@ func retrieveBackendFromConfigFile(pathToConfigFile string) model.Backend {
 
 	backend, err := findBackendForConfigFile(model)
 	if err != nil {
-		reportCLIErrorAndExit(fmt.Errorf("unable to locate backend implementation for '%s'", pathToConfigFile))
+		reportCLIErrorAndExit(fmt.Errorf("unable to locate backend implementation for '%s': %w", pathToConfigFile, err))
 		return nil
 	}
 

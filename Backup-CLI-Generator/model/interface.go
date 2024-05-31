@@ -20,9 +20,27 @@ type Backend interface {
 	QuickCheck(path string) error
 	Run(path string, args []string) error
 
-	Backup(path string) error
+	Backup(path string, rehashSource bool) error
 
 	SupportsBackupShellScriptDiffCheck() bool
 
 	BackupShellScriptDiffCheck(configFilePath string, shellScriptPath string) error
+}
+
+type BackendStruct struct {
+	ConfigType func() ConfigType
+
+	// script generation
+
+	GenerateBackup  func(path string, outputPath string) error
+	GenerateGeneric func(path string, outputPath string) error
+
+	// direct invocation
+	Run        func(path string, args []string) error
+	Backup     func(path string) error
+	QuickCheck func(path string) error
+
+	// misc
+
+	BackupShellScriptDiffCheckfunc func(configFilePath string, shellScriptPath string) error
 }

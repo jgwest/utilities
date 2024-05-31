@@ -10,18 +10,18 @@ import (
 	runbackup "github.com/jgwest/backup-cli/util/cmds/run-backup"
 )
 
-func (r ResticBackend) SupportsBackup() bool {
+func (ResticBackend) SupportsBackup() bool {
 	return true
 }
 
-func (r ResticBackend) Backup(path string) error {
+func (ResticBackend) Backup(path string, rehashSource bool) error {
 
 	config, err := extractAndValidateConfigFile(path)
 	if err != nil {
 		return err
 	}
 
-	if err := runBackupFromConfigFile(path, config); err != nil {
+	if err := runBackupFromConfigFile(path, config, rehashSource); err != nil {
 		return err
 	}
 
@@ -29,7 +29,7 @@ func (r ResticBackend) Backup(path string) error {
 
 }
 
-func runBackupFromConfigFile(configFilePath string, config model.ConfigFile) error {
+func runBackupFromConfigFile(configFilePath string, config model.ConfigFile, rehashSource bool) error {
 
 	res := runbackup.BackupRunObject{}
 
@@ -65,10 +65,7 @@ func runBackupFromConfigFile(configFilePath string, config model.ConfigFile) err
 
 		for _, processedFolder := range processedFolders {
 
-			folderPath, ok := (processedFolder[0]).(string)
-			if !ok {
-				return fmt.Errorf("invalid non-robocopy folderPath")
-			}
+			folderPath := processedFolder.SrcFolderPath
 
 			// The unsubstituted path is used here
 			res.Todo = append(res.Todo, folderPath)
@@ -76,7 +73,7 @@ func runBackupFromConfigFile(configFilePath string, config model.ConfigFile) err
 		}
 	}
 
-	if err := executeBackupInvocation(config, res); err != nil {
+	if err := executeBackupInvocation(config, res, rehashSource); err != nil {
 		return err
 	}
 
@@ -88,7 +85,7 @@ func runBackupFromConfigFile(configFilePath string, config model.ConfigFile) err
 
 }
 
-func executeBackupInvocation(config model.ConfigFile, input runbackup.BackupRunObject) error {
+func executeBackupInvocation(config model.ConfigFile, input runbackup.BackupRunObject, rehashSource bool) error {
 
 	directInvocation, err := generateResticDirectInvocation(config)
 	if err != nil {
@@ -121,6 +118,11 @@ func executeBackupInvocation(config model.ConfigFile, input runbackup.BackupRunO
 	directInvocation.Args = append(directInvocation.Args, tagSubstring...)
 
 	directInvocation.Args = append(directInvocation.Args, "backup")
+
+	if rehashSource {
+		directInvocation.Args = append(directInvocation.Args, "--force")
+	}
+
 	directInvocation.Args = append(directInvocation.Args, input.Todo...)
 
 	return directInvocation.Execute()

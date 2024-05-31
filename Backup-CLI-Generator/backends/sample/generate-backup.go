@@ -4,10 +4,10 @@ import (
 	"fmt"
 )
 
-func (r SampleBackend) SupportsGenerateBackup() bool {
+func (SampleBackend) SupportsGenerateBackup() bool {
 	return false
 }
 
-func (r SampleBackend) GenerateBackup(path string, outputPath string) error {
+func (SampleBackend) GenerateBackup(path string, outputPath string) error {
 	return fmt.Errorf("unsupported")
 }

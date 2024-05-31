@@ -4,11 +4,11 @@ import (
 	"github.com/jgwest/backup-cli/model"
 )
 
-func (r ResticBackend) SupportsQuickCheck() bool {
+func (ResticBackend) SupportsQuickCheck() bool {
 	return true
 }
 
-func (r ResticBackend) QuickCheck(path string) error {
+func (ResticBackend) QuickCheck(path string) error {
 
 	config, err := extractAndValidateConfigFile(path)
 	if err != nil {

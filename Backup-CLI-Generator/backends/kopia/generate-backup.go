@@ -12,11 +12,11 @@ import (
 	"github.com/jgwest/backup-cli/util/cmds/generate"
 )
 
-func (r KopiaBackend) SupportsGenerateBackup() bool {
+func (KopiaBackend) SupportsGenerateBackup() bool {
 	return true
 }
 
-func (r KopiaBackend) GenerateBackup(path string, outputPath string) error {
+func (KopiaBackend) GenerateBackup(path string, outputPath string) error {
 
 	config, err := extractAndValidateConfigFile(path)
 	if err != nil {
@@ -134,10 +134,7 @@ func generateBackupScriptFromConfigFile(configFilePath string, config model.Conf
 				substring = foldersNode.Env("TODO") + " "
 			}
 
-			folderPath, ok := (processedFolder[0]).(string)
-			if !ok {
-				return "", fmt.Errorf("invalid non-robocopy folderPath")
-			}
+			folderPath := processedFolder.SrcFolderPath
 
 			// TODO: This needs to be something different on Windows, probably without the slash
 

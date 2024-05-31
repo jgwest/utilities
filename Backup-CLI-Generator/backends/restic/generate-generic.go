@@ -10,11 +10,11 @@ import (
 	"github.com/jgwest/backup-cli/util/cmds"
 )
 
-func (r ResticBackend) SupportsGenerateGeneric() bool {
+func (ResticBackend) SupportsGenerateGeneric() bool {
 	return true
 }
 
-func (r ResticBackend) GenerateGeneric(path string, outputPath string) error {
+func (ResticBackend) GenerateGeneric(path string, outputPath string) error {
 
 	config, err := extractAndValidateConfigFile(path)
 	if err != nil {

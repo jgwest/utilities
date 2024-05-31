@@ -4,10 +4,10 @@ import (
 	"fmt"
 )
 
-func (r TarsnapBackend) SupportsQuickCheck() bool {
+func (TarsnapBackend) SupportsQuickCheck() bool {
 	return false
 }
 
-func (r TarsnapBackend) QuickCheck(path string) error {
+func (TarsnapBackend) QuickCheck(path string) error {
 	return fmt.Errorf("unsupported")
 }

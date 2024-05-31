@@ -2,6 +2,7 @@ package backends
 
 import (
 	"github.com/jgwest/backup-cli/backends/kopia"
+	"github.com/jgwest/backup-cli/backends/rclone"
 	"github.com/jgwest/backup-cli/backends/restic"
 	"github.com/jgwest/backup-cli/backends/robocopy"
 	"github.com/jgwest/backup-cli/backends/tarsnap"
@@ -15,6 +16,7 @@ func AvailableBackends() []model.Backend {
 		kopia.KopiaBackend{},
 		robocopy.RobocopyBackend{},
 		tarsnap.TarsnapBackend{},
+		rclone.RcloneBackend{},
 
 		// add new implementations here:
 		// sample.SampleBackend{},

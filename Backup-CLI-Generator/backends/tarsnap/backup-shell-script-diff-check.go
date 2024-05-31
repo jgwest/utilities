@@ -4,11 +4,11 @@ import (
 	diffgeneratedbackupscript "github.com/jgwest/backup-cli/util/cmds/diff-generated-backup-script"
 )
 
-func (r TarsnapBackend) SupportsBackupShellScriptDiffCheck() bool {
+func (TarsnapBackend) SupportsBackupShellScriptDiffCheck() bool {
 	return true
 }
 
-func (r TarsnapBackend) BackupShellScriptDiffCheck(configFilePath string, shellScriptPath string) error {
+func (TarsnapBackend) BackupShellScriptDiffCheck(configFilePath string, shellScriptPath string) error {
 
 	config, err := extractAndValidateConfigFile(configFilePath)
 	if err != nil {

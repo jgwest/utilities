@@ -4,11 +4,11 @@ import (
 	diffgeneratedbackupscript "github.com/jgwest/backup-cli/util/cmds/diff-generated-backup-script"
 )
 
-func (r ResticBackend) SupportsBackupShellScriptDiffCheck() bool {
+func (ResticBackend) SupportsBackupShellScriptDiffCheck() bool {
 	return true
 }
 
-func (r ResticBackend) BackupShellScriptDiffCheck(configFilePath string, shellScriptPath string) error {
+func (ResticBackend) BackupShellScriptDiffCheck(configFilePath string, shellScriptPath string) error {
 
 	config, err := extractAndValidateConfigFile(configFilePath)
 	if err != nil {
