@@ -18,16 +18,12 @@ func (RcloneBackend) SupportsBackup() bool {
 
 func (RcloneBackend) Backup(path string, rehashSource bool) error {
 
-	if rehashSource {
-		return fmt.Errorf("unsupported flag: rehash source")
-	}
-
 	config, err := extractAndValidateConfigFile(path)
 	if err != nil {
 		return err
 	}
 
-	if err := runBackupFromConfigFile(path, config); err != nil {
+	if err := runBackupFromConfigFile(path, config, rehashSource); err != nil {
 		return err
 	}
 
@@ -42,7 +38,7 @@ type sourceToDestFolder struct {
 	dest string
 }
 
-func runBackupFromConfigFile(configFilePath string, config model.ConfigFile) error {
+func runBackupFromConfigFile(configFilePath string, config model.ConfigFile, rehashSource bool) error {
 
 	res := runbackup.BackupRunObject{}
 
@@ -99,7 +95,7 @@ func runBackupFromConfigFile(configFilePath string, config model.ConfigFile) err
 
 	}
 
-	if err := executeBackupInvocation(config, rcloneFolders, res); err != nil {
+	if err := executeBackupInvocation(config, rcloneFolders, res, rehashSource); err != nil {
 		return err
 	}
 
@@ -110,7 +106,7 @@ func runBackupFromConfigFile(configFilePath string, config model.ConfigFile) err
 	return nil
 }
 
-func executeBackupInvocation(config model.ConfigFile, rcloneFolders []sourceToDestFolder, input runbackup.BackupRunObject) error {
+func executeBackupInvocation(config model.ConfigFile, rcloneFolders []sourceToDestFolder, input runbackup.BackupRunObject, rehashSource bool) error {
 
 	// rcloneCredentials, err := getAndValidateRcloneCredentials(config)
 	// if err != nil {
@@ -135,6 +131,11 @@ func executeBackupInvocation(config model.ConfigFile, rcloneFolders []sourceToDe
 			"--transfers", "8",
 			"--delete-excluded",
 		}
+
+		if rehashSource {
+			cliInvocation = append(cliInvocation, "--checksum")
+		}
+
 		cliInvocation = append(cliInvocation, switches...)
 
 		for _, globalExclude := range input.GlobalExcludes {
@@ -147,7 +148,8 @@ func executeBackupInvocation(config model.ConfigFile, rcloneFolders []sourceToDe
 		}
 
 		if err := robocopyDI.Execute(); err != nil {
-			return err
+			fmt.Println("ERROR:", err)
+			continue
 		}
 
 	}
